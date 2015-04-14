@@ -94,7 +94,8 @@ def fluxcal(imagelist):
 
 # run standard on our standard star observations
 
-    iraf.noao.onedspec.standard.samestar = 'yes'
+    iraf.noao.onedspec.standard.samestar = 'no' 
+    # Frequently observed different stars, changing that value
     iraf.noao.onedspec.standard.beam_switch = 'no'
     iraf.noao.onedspec.standard.apertures = ''
     iraf.noao.onedspec.standard.bandwidth = '20'
@@ -112,7 +113,7 @@ def fluxcal(imagelist):
         iraf.noao.onedspec.standard.star_name = stdlist[g][2]
         iraf.noao.onedspec.standard(input = 'wavecal/dc.' + stdlist[g][0], output = 'stdfile')
         g = g + 1
-
+    
 # now run sensfunc to get sensitivity functions out
 
     iraf.noao.onedspec.sensfunc.apertures = ''
@@ -148,5 +149,5 @@ def fluxcal(imagelist):
     while aa < numscience:
         iraf.noao.onedspec.calibrate(input = 'wavecal/dc.' + sciencelist[aa][0], output = 'finals/' + sciencelist[aa][2], sensitivity = 'sens')
         aa = aa + 1
-
+    
     iraf.flprcache()

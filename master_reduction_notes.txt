@@ -36,14 +36,18 @@ Detailed version:
 - Edit to_reduce.lis: remove all Xenon lamps, double check object codes (flux standards should be 'std'), give independent exposures of the same target different root names (i.e.,
 GJ699.1,GJ699.2, etc.). 
 
+
 raw2extract.raw2extract('to_reduce.lis')
 
 - Yes, fit masterflat interactively
 - :order [value] changes the order of the fitting function, f reruns the fit. Use w+t and w+b to change top and bottom of the plot, w+a to reset. Double check that the fitting function is really close to the masterflat. 
 
-- Have to hit enter all the way through the interactive aperture and trace functions. Note that if the input prompt doesn't appear in the xgterm, it's in the graphics window!
+- Have to hit enter/q all the way through the interactive aperture and trace functions. Note that if the input prompt doesn't appear in the xgterm, it's in the graphics window! If the red crosshairs appear, type q instead of enter.
 
 - Sometimes have to delete points (d) to make trace follow the spectrum properly, then type f to refit. The trace should run approximately linearly along the whole ccd. 
+
+- If you have to re-run this (i.e. to refit the masterflat) AND there were no aperture/trace issues the first time through, change raw2extract.py so that line 341 "apall.interactive = 'no'" instead of "yes" and then there's just one interactive Q per spectrum, not sevenish. Then "reload(raw2extract)" and rerun.
+
 
 wavecal.wavecal('to_wavecal.lis')
 
@@ -56,11 +60,14 @@ wavecal.wavecal('to_wavecal.lis')
 - Type f to go back to the fitting screen. :order 4 works well for Echelle and gets to 0.05 angstrom rms residuals. Delete any outliers as necessary (d). 
 - q to go back to the spectrum, if the x-axis is wonky or the xgterm prints out 'solution is not monotonic', go back and drop the fit down by an order
 
+- the wavelength solution is stored in database/
+
 Use sky lines to refine the wavelength calibration
 In IDL:
 OIshift_corr, 'to_shift.lis'
 type 'ccd.###' for the reference sky image
 
+- Reference image should be a long exposure
 - hit enter all the way through, check for bad shifts
 - Spits out "% Program caused arithmetic error: Floating underflow", but that doesn't seem to affect anything
 

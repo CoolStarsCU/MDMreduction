@@ -1,0 +1,88 @@
+Brief version: 
+
+Copy IDL reduction scripts into the data directory (MODprep.pro, OIshift_corr.pro), pyraf scripts in PYTHONPATH
+
+have three terminal windows open: one regular terminal to access the directory, one to run idl in , and an xgterm. In the xgterm, cd to the iraf home directory and launch pyraf, then cd to the data directory.
+
+All commands:
+.com MODprep.pro
+MODPREP
+import raw2extract, wavecal, shift, fluxcal
+raw2extract.raw2extract("to_reduce.lis")
+wavecal.wavecal('to_wavecal.lis')
+.com OIshift_corr
+OIshift_corr, 'to_shift.lis'
+shift.shift('OI_shifts.tbl')
+fluxcal.fluxcal('to_shift.lis')
+
+To redo raw2extract, wavecal/shift, and fluxcal (respectively):
+rm -fr cleaned/ extract/ flattened/ trimmed/ lamp* logfile master* normflat.fits 
+rm -fr wavecal/ database/ OI_shifts.tbl 
+rm -rf finals sens* stdfile
+
+After MODPREP, edit to_reduce.lis to remove Xe lamps and disambiguate multiple exposures of the same target
+
+copy to_reduce.lis -> to_wavecal.lis, remove biases and flasts
+
+copy to_wavecal.lis -> to_shift.lis, remove lamps
+
+
+Detailed version:
+
+- Double-check the subarray and make sure the image sections in MODprep.pro are correct for the instrument setup.
+
+- Run MODprep.pro, which auto-magically creates a list ('to_reduce.lis') of the spectra in the directory you are in, and pulls key parameters out of the headers to populate a table that pyraf will read. It will ask for a reference lamp as well. 
+
+- Edit to_reduce.lis: remove all Xenon lamps, double check object codes (flux standards should be 'std'), give independent exposures of the same target different root names (i.e.,
+GJ699.1,GJ699.2, etc.). 
+
+raw2extract.raw2extract('to_reduce.lis')
+
+- Yes, fit masterflat interactively
+- :order [value] changes the order of the fitting function, f reruns the fit. Use w+t and w+b to change top and bottom of the plot, w+a to reset. Double check that the fitting function is really close to the masterflat. 
+
+- Have to hit enter all the way through the interactive aperture and trace functions. Note that if the input prompt doesn't appear in the xgterm, it's in the graphics window!
+
+- Sometimes have to delete points (d) to make trace follow the spectrum properly, then type f to refit. The trace should run approximately linearly along the whole ccd. 
+
+wavecal.wavecal('to_wavecal.lis')
+
+- identify lines using images in mdmred directory [note from Steph: I need to add my updated labelled images]
+
+- Identify a few lines across the whole ccd by hand: the Hg lines are good for this since they're not in iraf's database anyway. 
+- Hover over a line, type m, then type in the full wavelength (for Hg lines) or just up to the decimal point (for Ne lines) and type enter
+- Type f, :order 3, f to get an approximate fit, then q to go back to the spectrum. Now it should be in wavelength units instead of pixel units (and if you're using Echelle, the spectrum will be flipped from the pixel version)
+- Hover over lines and type m to identify them. The Ne lines are in a iraf's database, so m+enter will give you most of them. ID as many as possible across the ccd.
+- Type f to go back to the fitting screen. :order 4 works well for Echelle and gets to 0.05 angstrom rms residuals. Delete any outliers as necessary (d). 
+- q to go back to the spectrum, if the x-axis is wonky or the xgterm prints out 'solution is not monotonic', go back and drop the fit down by an order
+
+Use sky lines to refine the wavelength calibration
+In IDL:
+OIshift_corr, 'to_shift.lis'
+type 'ccd.###' for the reference sky image
+
+- hit enter all the way through, check for bad shifts
+- Spits out "% Program caused arithmetic error: Floating underflow", but that doesn't seem to affect anything
+
+
+shift.shift('OI_shifts.tbl')
+
+- hit enter all the way through, applying the calculated shifts to the data spectra
+
+
+fluxcal.fluxcal('to_shift.lis')
+
+- If a standard was observed twice (so its files have .1, .2 in them) have to type the name in by hand when iraf queries
+- 'yes' to editing bandpasses by hand. Remove telluric and other absorption features, and cosmic rays if needed. q to quit.
+- 'yes' to fitting the sensitivity function by hand.  :order 3 is usually good. g to refit (unlike every other iraf program)
+- The 5000-7500 \AA region is the most relevant, and the residuals (bottom panel) should be approximately flat there. Delete points from the ends (d+p) until the residuals are flat in the important region. 
+
+- Use splot to plot one of the standards and make sure it looks ok (I'll put a reference for Feige34 in the mdmred folder). They should show approximately a blackbody, with some absorption. Sometimes tellurics are impossible to remove, just live with it.  
+- If the standard(s) look good, check the other spectra too. 
+- Co-add as needed with sarith task
+
+
+
+
+
+

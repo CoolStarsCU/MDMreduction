@@ -333,6 +333,7 @@ def raw2extract(imagelist):
     y = 0
     while y < numscience:
         iraf.noao.imred.ccdred.ccdproc(images = 'cleaned/cr.' + sciencelist[y][0], output = 'flattened/fl.' + sciencelist[y][0])
+        #iraf.imcopy('cleaned/cr.' + sciencelist[y][0],'flattened/fl.' + sciencelist[y][0])
         y = y + 1
 
     iraf.unlearn(iraf.noao.twodspec.apextract.apall)
@@ -341,7 +342,7 @@ def raw2extract(imagelist):
     iraf.noao.twodspec.apextract.apall.format = 'multispec'
     iraf.noao.twodspec.apextract.apall.references = ''
     iraf.noao.twodspec.apextract.apall.profiles = ''
-    iraf.noao.twodspec.apextract.apall.interactive = 'yes'
+    iraf.noao.twodspec.apextract.apall.interactive = 'yes'#'no'#
     iraf.noao.twodspec.apextract.apall.find = 'yes'
     iraf.noao.twodspec.apextract.apall.recenter = 'yes'
     iraf.noao.twodspec.apextract.apall.resize = 'yes'

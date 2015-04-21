@@ -18,6 +18,8 @@ from spectra_splitter import spectra_splitter
 from flat_normalizer import flat_normalizer
 from sky_checker import sky_checker
 
+import astropy.io.ascii as at
+
 def fluxcal(imagelist):
 
 # read in a list of spectra as defined in point 1 above:
@@ -143,11 +145,23 @@ def fluxcal(imagelist):
 #    iraf.noao.onedspec.calibrate.airmass = 'QAIRMASS'
 #    iraf.noao.onedspec.calibrate.exptime = 'QEXPTIME'
 
+    # find the max and min regions used by the sensitivity function
+    sensfunc_log = at.read("sensfunclog",data_start=6)
+    sensfunc_wave = sensfunc_log['col1']
+
+    # Final flux calibration 
+    # and trimming beyond the good flux calibration region
     os.mkdir('finals')
 
     aa = 0
     while aa < numscience:
-        iraf.noao.onedspec.calibrate(input = 'wavecal/dc.' + sciencelist[aa][0], output = 'finals/' + sciencelist[aa][2], sensitivity = 'sens')
+        iraf.noao.onedspec.calibrate(input = 'wavecal/dc.' + sciencelist[aa][0],
+                                     output = 'finals/' + sciencelist[aa][2],
+                                     sensitivity = 'sens')
+        iraf.noao.onedspec.scopy(input='finals/' + sciencelist[aa][2],
+                                 output = 'finals/trim.' + sciencelist[aa][2],
+                                 w1=sensfunc_wave[0],w2=sensfunc_wave[-1],
+                                 rebin='no')
         aa = aa + 1
     
     iraf.flprcache()

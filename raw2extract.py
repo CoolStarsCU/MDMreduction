@@ -66,19 +66,18 @@
 #
 #Kevin Covey
 #Version 1.0 (Last Modified 3-12-12; segment of former MODpipeline.py code)
+#Stephanie Douglas
+#Version 2.0 (Last Modified 4-23-15)
 ###############################################################################
+
+import os
+
+import numpy as np
 
 from pyraf import iraf
 from pyraf.iraf import noao
 from pyraf.iraf import imutil, imred, crutil, ccdred, echelle, images, tv
 from pyraf.iraf import system, twodspec, longslit, apextract, onedspec, astutil
-import spectra_splitter, split_strings, sky_checker, os
-from split_strings import split_strings
-from spectra_splitter import spectra_splitter
-from flat_normalizer import flat_normalizer
-from sky_checker import sky_checker
-
-import numpy as np
 
 from list_utils import read_reduction_list
 

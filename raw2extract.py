@@ -78,91 +78,50 @@ from spectra_splitter import spectra_splitter
 from flat_normalizer import flat_normalizer
 from sky_checker import sky_checker
 
+import numpy as np
+
+from list_utils import read_reduction_list
+
 def raw2extract(imagelist):
 
-# read in a list of spectra as defined in point 1 above:
+# get subsets of spectra: flats, lamps, biases, objects and std spectra
 
-    input = open(imagelist, 'r')
-    spectra = input.readlines()
+    image_dict = read_reduction_list(imagelist)
 
-# delete first two lines of the table, assuming a line of column headers
-# and a line of whitespace
-   # del spectra[0]
-   # del spectra[0]
-
-# count number of spectra to reduce
-    spectranum = len(spectra)
-
-# go through table line by line and remove spaces, tabs, and end of line marks
-# each cleaned line is turned into a list, where spaces and tabs separate
-# items in a list for each line.  Each line's list is itself nested in a larger
-# list
-
-    i = 0
-    while i < spectranum:
-        #print i, spectranum
-        spectra[i] = split_strings(spectra[i])
-        i = i + 1
-        
-# now create important subsets: flats, lamps, biases, objects and std spectra
-
-#first make lists for all the objects
-    flatlist = [] 
-    lamplist = []
-    biaslist = []
-    sciencelist = []
-    stdlist = []
-    
-#fill those lists with the names of objects
-
-    j = 0
-    while j < spectranum:
-            #print j,len(spectra[j])
-            if spectra[j][1] == 'obj':
-                sciencelist.append(spectra[j])
-                j = j + 1
-            elif spectra[j][1] == 'std':
-                sciencelist.append(spectra[j])
-                stdlist.append(spectra[j])
-                j = j + 1
-            elif spectra[j][1] == 'flat':
-                flatlist.append(spectra[j])
-                j = j + 1
-            elif spectra[j][1] == 'lamp':
-                lamplist.append(spectra[j])
-                j = j + 1
-            elif spectra[j][1] == 'bias':
-                biaslist.append(spectra[j])
-                j = j + 1
-            else:
-                j = j + 1
+    # split out the relevant lists 
+    # and make them arrays for marginally faster readout
+    flat_list = np.array(image_dict["flat"])
+    lamp_list = np.array(image_dict["lamp"])
+    bias_list = np.array(image_dict["bias"])
+    science_list = np.array(image_dict["science_list"])
+    science_names = np.array(image_dict["science_names"])
+    std_list = np.array(image_dict["std"])
+    std_names = np.array(image_dict["std_names"])
 
 # find the number of objects in each list
 
-    numflats = len(flatlist)
-    numlamps = len(lamplist)
-    numscience = len(sciencelist)
-    numbiases = len(biaslist)
-    numstds = len(stdlist)
+    numflats = len(flat_list)
+    numlamps = len(lamp_list)
+    numscience = len(science_list)
+    numbiases = len(bias_list)
+    numstds = len(std_list)
     
-    overscanregion = flatlist[0][4] #'[' + redlowcoloverscan + ':' + redhighcoloverscan + ',' + redlowlinedata + ':' + redhighlinedata + ']'
-    gooddata = flatlist[0][3]#'[' + redlowcoldata + ':' + redhighcoldata + ',' + redlowlinedata + ':' + redhighlinedata +']'
+    overscanregion = image_dict["overscan_region"]
+    gooddata = image_dict["good_region"]
 
-#define the gain and read noise
+    print "{} Science images".format(numscience)
+
+#define the gain and read noise - this is now probably wrong, because we're using Echelle???
     gain = '2.7' # taken from header in Dec. 2010, but matches 1997 docs.
     readnoise = '7.9' # taken from web documentation dated 1997
 
 #combine biases into master biases of each color
 
-    k = 0
     biasestocombine = ''
-    while k < numbiases:
-        if k == 0:
-            biasestocombine = biaslist[k][0]
-            k = k + 1
-        else:
-            biasestocombine = biasestocombine + ',' + biaslist[k][0]
-            k = k + 1
+    for bias_file in bias_list:
+        biasestocombine = biasestocombine + ", {}".format(bias_file)
+    # then remove that first comma
+    biasestocombine = biasestocombine[2:]
 
     iraf.noao.imred.ccdred.zerocombine.combine = 'median'
     iraf.noao.imred.ccdred.zerocombine.reject = 'minmax'
@@ -215,26 +174,20 @@ def raw2extract(imagelist):
     iraf.noao.imred.ccdred.ccdproc.biassec = overscanregion
     iraf.noao.imred.ccdred.ccdproc.trimsec = gooddata
     iraf.noao.imred.ccdred.ccdproc.zero = 'masterbias'
-   
-    m = 0
-    while m < numscience:
-        iraf.noao.imred.ccdred.ccdproc(images = sciencelist[m][0], output = 'trimmed/tr.' + sciencelist[m][0])
-        m = m + 1
 
-    n = 0
-    while n < numflats:
-        iraf.noao.imred.ccdred.ccdproc(images = flatlist[n][0], output = 'trimmed/tr.' + flatlist[n][0])
-        n = n + 1
+    for science_file in science_list:
+        iraf.noao.imred.ccdred.ccdproc(images = science_file, 
+                                       output = 'trimmed/tr.' + science_file)
 
-    o = 0
-    while o < numlamps:
-        iraf.noao.imred.ccdred.ccdproc(images = lamplist[o][0], output = 'trimmed/tr.' + lamplist[o][0])
-        o = o + 1
+    for flat_file in flat_list:
+        iraf.noao.imred.ccdred.ccdproc(images = flat_file,  
+                                       output = 'trimmed/tr.' + flat_file)
 
-    p = 0
-    while p < numbiases:
-        iraf.noao.imred.ccdred.ccdproc(images = biaslist[p][0], output = 'trimmed/tr.' + biaslist[p][0])
-        p = p + 1    
+    for lamp_file in lamp_list:
+        iraf.noao.imred.ccdred.ccdproc(images = lamp_file,  
+                                       output = 'trimmed/tr.' + lamp_file)
+
+    # We already combined the biases, we shouldn't be flatfielding them???
 
 # now clean out the cosmic rays (just from the science images)
 
@@ -248,23 +201,18 @@ def raw2extract(imagelist):
     iraf.imred.crutil.cosmicrays.window = '5'
     iraf.imred.crutil.cosmicrays.interactive = 'no'
 
-    print numscience
-    u = 0
-    while u < numscience:
-        iraf.imred.crutil.cosmicrays(input = 'trimmed/tr.' + sciencelist[u][0], output = 'cleaned/cr.' + sciencelist[u][0])
-        u = u + 1
+
+    for science_file in science_list:
+        iraf.imred.crutil.cosmicrays(input = 'trimmed/tr.' + science_file,
+                                     output = 'cleaned/cr.' + science_file)
     
 # now combine the flats and use response on the master flats
 
-    w = 0
     flatstocombine = ''
-    while w < numflats:
-        if w == 0:
-            flatstocombine = 'trimmed/tr.' + flatlist[w][0]
-            w = w + 1
-        else:
-            flatsstocombine = flatstocombine + ',' + 'trimmed/tr.' + flatlist[w][0]
-            w = w + 1
+    for flat_file in flat_list:
+        flatstocombine = flatstocombine + ", {}".format(flat_file)
+    # then remove that first comma
+    flatstocombine = flatstocombine[2:]
 
     iraf.noao.imred.ccdred.flatcombine.combine = 'average'
     iraf.noao.imred.ccdred.flatcombine.reject = 'avsigclip'
@@ -330,11 +278,10 @@ def raw2extract(imagelist):
 
     iraf.noao.imred.ccdred.ccdproc.flat = 'normflat'
     
-    y = 0
-    while y < numscience:
-        iraf.noao.imred.ccdred.ccdproc(images = 'cleaned/cr.' + sciencelist[y][0], output = 'flattened/fl.' + sciencelist[y][0])
-        #iraf.imcopy('cleaned/cr.' + sciencelist[y][0],'flattened/fl.' + sciencelist[y][0])
-        y = y + 1
+    for science_file in science_list:
+        iraf.noao.imred.ccdred.ccdproc(images = 'cleaned/cr.' + science_file, 
+                                       output = 'flattened/fl.' + science_file)
+        #iraf.imcopy('cleaned/cr.' + science_file,'flattened/fl.' + science_file)
 
     iraf.unlearn(iraf.noao.twodspec.apextract.apall)
     
@@ -406,14 +353,18 @@ def raw2extract(imagelist):
 
     os.mkdir('extract')
 
-    a = 0
-    while a < numscience:
-        iraf.noao.twodspec.apextract.apall(input = 'flattened/fl.' + sciencelist[a][0], output = 'extract/ex.' + sciencelist[a][0])
-        a = a + 1
+    for science_file in science_list:
+        iraf.noao.twodspec.apextract.apall(input = 'flattened/fl.' + science_file, 
+                                           output = 'extract/ex.' + science_file)
 
 # now extract a blue and red lamp using the first science object as our trace.
 
-    iraf.noao.twodspec.apextract.apall.references = 'flattened/fl.' + stdlist[0][0]
+    if len(std_list)>0:
+        trace_ref_image = std_list[0]
+    else:
+        trace_ref_image = science_list[0]
+
+    iraf.noao.twodspec.apextract.apall.references = 'flattened/fl.' + trace_ref_image
     iraf.noao.twodspec.apextract.apall.interactive = 'no'
     iraf.noao.twodspec.apextract.apall.find = 'no'
     iraf.noao.twodspec.apextract.apall.recenter = 'no'
@@ -426,9 +377,8 @@ def raw2extract(imagelist):
     iraf.noao.twodspec.apextract.apall.clean = 'no'
     iraf.noao.twodspec.apextract.apall.weights = 'none'
 
-    a = 0
-    while a < numlamps: 
-        iraf.noao.twodspec.apextract.apall(input = 'trimmed/tr.' + lamplist[a][0], output = 'lamp.'+lamplist[a][0])
-        a = a + 1
+    for lamp_file in lamp_list:
+        iraf.noao.twodspec.apextract.apall(input = 'trimmed/tr.' + lamp_file,  
+                                           output = 'lamp.'+lamp_file)
 
     iraf.flprcache()

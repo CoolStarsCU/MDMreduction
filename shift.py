@@ -39,72 +39,62 @@ from spectra_splitter import spectra_splitter
 from flat_normalizer import flat_normalizer
 from sky_checker import sky_checker
 
+import numpy as np
+
+from list_utils import read_OI_shifts
+
 def shift(imagelist):
 
-# read in a list of spectra as defined in point 1 above:
+# get subsets of spectra: flats, lamps, biases, objects and std spectra
 
-    input = open(imagelist, 'r')
-    spectra = input.readlines()
+    image_dict = read_OI_shifts(imagelist,science_types=["obj","std"])
 
-# delete first two lines of the table, assuming a line of column headers
-# and a line of whitespace
-   # del spectra[0]
-   # del spectra[0]
+    # split out the relevant lists 
+    # and make them arrays for marginally faster readout
+    science_list = np.array(image_dict["science_list"])
+    science_names = np.array(image_dict["science_names"])
+    shifts = np.array(image_dict["science_shift"])
+    shift_errs = np.array(image_dict["science_shift_err"])
+    shift_qual = np.array(image_dict["science_shift_qual"])
+    std_list = np.array(image_dict["std"])
+    std_names = np.array(image_dict["std_names"])
 
-# count number of spectra to reduce
-    spectranum = len(spectra)
+    numscience = len(science_list)
+    numstds = len(std_list)
 
-# go through table line by line and remove spaces, tabs, and end of line marks
-# each cleaned line is turned into a list, where spaces and tabs separate
-# items in a list for each line.  Each line's list is itself nested in a larger
-# list
 
-    i = 0
-    while i < spectranum:
-        spectra[i] = split_strings(spectra[i])
-        i = i + 1
-        
-# now create important subsets: flats, lamps, biases, objects and std spectra
-
-#first make lists for all the objects
-    sciencelist = []
-    stdlist = []
-    
-#fill those lists with the names of objects
-
-    j = 0
-    while j < spectranum:
-            if spectra[j][1] == 'obj':
-                sciencelist.append(spectra[j])
-                j = j + 1
-            elif spectra[j][1] == 'std':
-                sciencelist.append(spectra[j])
-                stdlist.append(spectra[j])
-                j = j + 1
-            else:
-                j = j + 1
-
-# find the number of objects in each list
-
-    numscience = len(sciencelist)
-    numstds = len(stdlist)
-    
 # now apply the shift determined by the IDL code to each spectrum, and add lines
 # in the header to document the shift applied, the error in the shift, and the
 # quality factor of the sky spectrum that was used to derive the shift..
-    e = 0
-    while e < numscience:
+    for j,science_file in enumerate(science_list):
+        print 'wavecal/wc.'+science_file
+        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + science_file, 
+                                 output = 'wavecal/preshift.' + science_file,  
+                                 bands = '1', format = "onedspec")
+        iraf.noao.onedspec.wspectext(
+                    input = 'wavecal/preshift.{}.2001'.format(science_file), 
+                    output = 'wavecal/preshift.' + science_file, header = 'no')
+        iraf.images.imutil.hedit(images = 'wavecal/wc.'+science_file,  
+                                 fields = 'OI_SHIFT', value = shifts[j],
+                                 add = 'yes', show = 'yes')
+        iraf.images.imutil.hedit(images = 'wavecal/wc.'+science_file,   
+                                 fields = 'OI_ERR', value = shift_errs[j],
+                                 add = 'yes', show = 'yes')
+        iraf.images.imutil.hedit(images = 'wavecal/wc.'+science_file,   
+                                 fields = 'OI_QUAL', value = shift_qual[j], 
+                                  add = 'yes', show = 'yes') 
 
-        print 'wavecal/wc.'+sciencelist[e][0]
-        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + sciencelist[e][0], output = 'wavecal/preshift.' + sciencelist[e][0], bands = '1', format = "onedspec")
-        iraf.noao.onedspec.wspectext(input = 'wavecal/preshift.' + sciencelist[e][0] + '.2001', output = 'wavecal/preshift.' + sciencelist[e][0], header = 'no')
-        iraf.images.imutil.hedit(images = 'wavecal/wc.'+sciencelist[e][0], fields = 'OI_SHIFT', value = sciencelist[e][3], add = 'yes', show = 'yes')
-        iraf.images.imutil.hedit(images = 'wavecal/wc.'+sciencelist[e][0], fields = 'OI_ERR', value = sciencelist[e][4], add = 'yes', show = 'yes')
-        iraf.images.imutil.hedit(images = 'wavecal/wc.'+sciencelist[e][0], fields = 'OI_QUAL', value = sciencelist[e][5], add = 'yes', show = 'yes')                            
-        iraf.noao.onedspec.dispcor(input = 'wavecal/wc.'+sciencelist[e][0], output = 'wavecal/dc.'+sciencelist[e][0], linearize = 'yes')
-        iraf.noao.onedspec.specshift(spectra = 'wavecal/dc.'+sciencelist[e][0], shift = sciencelist[e][3])
-        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + sciencelist[e][0], output = 'wavecal/postshift.' + sciencelist[e][0], bands = '1', format = "onedspec")
-        iraf.noao.onedspec.wspectext(input = 'wavecal/postshift.' + sciencelist[e][0] + '.2001', output = 'wavecal/postshift.' + sciencelist[e][0], header = 'no')
-        e = e + 1
-    
+        iraf.noao.onedspec.dispcor(input = 'wavecal/wc.'+science_file,  
+                                   output = 'wavecal/dc.'+science_file,   
+                                   linearize = 'yes')
+        iraf.noao.onedspec.specshift(spectra = 'wavecal/dc.'+science_file,   
+                                     shift = shifts[j])
+        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + science_file,   
+                                 output = 'wavecal/postshift.' + science_file, 
+                                 bands = '1', format = "onedspec")
+        iraf.noao.onedspec.wspectext(
+                    input = 'wavecal/postshift.{}.2001'.format(science_file),
+                    output = 'wavecal/postshift.' + science_file, header = 'no')
+
+
     iraf.flprcache()

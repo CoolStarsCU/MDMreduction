@@ -20,37 +20,19 @@ from sky_checker import sky_checker
 
 import astropy.io.ascii as at
 
+from list_utils import read_reduction_list
+
 def fluxcal(imagelist):
 
-# read in a list of spectra as defined in point 1 above:
+# get subsets of spectra: flats, lamps, biases, objects and std spectra
 
-    image_list = at.read(imagelist,data_start=0,
-                         names=["ccdno","type","target","image_region",
-                                "bias_region","reference_lamp"])
-    spectranum = len(image_list)
-        
-# now create important subsets: flats, lamps, biases, objects and std spectra
+    image_dict = read_reduction_list(imagelist)
 
-# first make lists for all the objects
-    science_list = []
-    science_names = []
-    std_list = []
-    std_names = []
+    science_list = image_dict["science_list"]
+    science_names = image_dict["science_names"]
+    std_list = image_dict["std"]
+    std_names = image_dict["std_names"]
     
-# fill those lists with the names of objects
-
-    for j,target_type in enumerate(image_list["type"]):
-            if target_type == 'obj':
-                science_list.append(image_list["ccdno"][j])
-                science_names.append(image_list["target"][j])
-            elif target_type == 'std':
-                science_list.append(image_list["ccdno"][j])
-                science_names.append(image_list["target"][j])
-                std_list.append(image_list["ccdno"][j])
-                std_names.append(image_list["target"][j])
-            else:
-                continue
-
 # find the number of objects in each list
 
     numscience = len(science_list)

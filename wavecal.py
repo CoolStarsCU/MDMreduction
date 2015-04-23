@@ -39,73 +39,43 @@ from spectra_splitter import spectra_splitter
 from flat_normalizer import flat_normalizer
 from sky_checker import sky_checker
 
+import numpy as np
+
+from list_utils import read_reduction_list
+
 def wavecal(imagelist):
 
-# read in a list of spectra as defined in point 1 above:
+# get subsets of spectra: flats, lamps, biases, objects and std spectra
 
-    input = open(imagelist, 'r')
-    spectra = input.readlines()
+    image_dict = read_reduction_list(imagelist,obj_types=["obj","std","lamp"])
 
-# delete first two lines of the table, assuming a line of column headers
-# and a line of whitespace
-   # del spectra[0]
-   # del spectra[0]
+    # split out the relevant lists 
+    # and make them arrays for marginally faster readout
+    lamp_list = np.array(image_dict["lamp"])
+    science_list = np.array(image_dict["science_list"])
+    science_names = np.array(image_dict["science_names"])
+    science_lamps = np.array(image_dict["science_reference_lamp"])
+    std_list = np.array(image_dict["std"])
+    std_names = np.array(image_dict["std_names"])
 
-# count number of spectra to reduce
-    spectranum = len(spectra)
-
-# go through table line by line and remove spaces, tabs, and end of line marks
-# each cleaned line is turned into a list, where spaces and tabs separate
-# items in a list for each line.  Each line's list is itself nested in a larger
-# list
-
-    i = 0
-    while i < spectranum:
-        spectra[i] = split_strings(spectra[i])
-        i = i + 1
-        
-# now create important subsets: flats, lamps, biases, objects and std spectra
-
-#first make lists for all the objects
-    lamplist = []
-    sciencelist = []
-    stdlist = []
-    
-#fill those lists with the names of objects
-
-    j = 0
-    while j < spectranum:
-            if spectra[j][1] == 'obj':
-                sciencelist.append(spectra[j])
-                j = j + 1
-            elif spectra[j][1] == 'std':
-                sciencelist.append(spectra[j])
-                stdlist.append(spectra[j])
-                j = j + 1
-            elif spectra[j][1] == 'lamp':
-                lamplist.append(spectra[j])
-                j = j + 1
-            else:
-                j = j + 1
-
-# find the number of objects in each list
-
-    numlamps = len(lamplist)
-    numscience = len(sciencelist)
-    numstds = len(stdlist)
+    numlamps = len(lamp_list)
+    numscience = len(science_list)
+    numstds = len(std_list)
     
 # now identify lamp features
 
-    iraf.noao.onedspec.identify(images = 'lamp.'+lamplist[0][0])
+    reference_lamp = lamp_list[0]
+
+    iraf.noao.onedspec.identify(images = 'lamp.'+reference_lamp)
 
 # now apply lamp solution to the rest of the lamps
+# not that it matters since we apply the first lamp to everything anyway
 
-    k = 0
-    while k < numlamps:
-         iraf.noao.onedspec.reidentify(reference = 'lamp.'+lamplist[0][0], images = 'lamp.'+lamplist[k][0])
-         k = k+1
+    for lamp_file in lamp_list:
+         iraf.noao.onedspec.reidentify(reference = 'lamp.'+reference_lamp,  
+                                       images = 'lamp.'+lamp_file)
 
-# now apply the appropriate lamp to each spectrum
+# now apply the appropriate lamp to each spectrum - missing?
 
 # now apply lamp to science objects
 
@@ -119,17 +89,16 @@ def wavecal(imagelist):
 
     os.mkdir('wavecal')
 
-    e = 0
-    while e < numscience:
-        #print sciencelist[e][5]
-        iraf.noao.onedspec.refspec(input = 'extract/ex.' + sciencelist[e][0], reference = 'lamp.'+sciencelist[e][5])
-        iraf.noao.onedspec.dispcor(input = 'extract/ex.' + sciencelist[e][0], output = 'wavecal/wc.' + sciencelist[e][0])
-        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + sciencelist[e][0], output = 'wavecal/wc.' + sciencelist[e][0], bands = '3', format = "onedspec")
-        iraf.noao.onedspec.wspectext(input = 'wavecal/wc.' + sciencelist[e][0] + '.2001', output = 'wavecal/sky.' + sciencelist[e][0], header = 'no')
-        e = e + 1 
-
-#    f = 0
-#    while f < numscience:
-
+    for j,science_file in enumerate(science_list):
+        iraf.noao.onedspec.refspec(input = 'extract/ex.' + science_file, 
+                                   reference = 'lamp.'+science_lamps[j])
+        iraf.noao.onedspec.dispcor(input = 'extract/ex.' + science_file, 
+                                   output = 'wavecal/wc.' + science_file)
+        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + science_file, 
+                                 output = 'wavecal/wc.' + science_file, 
+                                 bands = '3', format = "onedspec")
+        iraf.noao.onedspec.wspectext(input = 'wavecal/wc.' + science_file + '.2001', 
+                                     output = 'wavecal/sky.' + science_file,  
+                                     header = 'no')
 
     iraf.flprcache()

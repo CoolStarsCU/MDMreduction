@@ -44,6 +44,9 @@ raw2extract.raw2extract('to_reduce.lis')
 
 - Have to hit enter/q all the way through the interactive aperture and trace functions. Note that if the input prompt doesn't appear in the xgterm, it's in the graphics window! If the red crosshairs appear, type q instead of enter.
 
+- If there are multiple stars on the slit and apall has selected the wrong trace, hover over the incorrect trace and type "d", then hover over the right trace and type "m". 
+- Hit b to see the background fit, q to go back - then the background windows will have moved to the new star selection.
+
 - Sometimes have to delete points (d) to make trace follow the spectrum properly, then type f to refit. The trace should run approximately linearly along the whole ccd. 
 
 - If you have to re-run this (i.e. to refit the masterflat) AND there were no aperture/trace issues the first time through, change raw2extract.py so that line 341 "apall.interactive = 'no'" instead of "yes" and then there's just one interactive Q per spectrum, not sevenish. Then "reload(raw2extract)" and rerun.

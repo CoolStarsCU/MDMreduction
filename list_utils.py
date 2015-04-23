@@ -8,9 +8,8 @@ def read_list(imagelist,
               column_headers=["ccdno","type","target","image_region",
                               "bias_region","reference_lamp"],
               obj_types=["obj","std","flat","bias","lamp"],
-              science_types=["obj","std"],return_regions=True,
-              data_header="image_region",bias_header="bias_region",
-              return_lamps=True,lamp_header="reference_lamp"):
+              science_types=["obj","std"],return_other_cols=True,
+              return_regions=True):
     """
     read in an object list made by MODprep. 
 
@@ -59,8 +58,9 @@ def read_list(imagelist,
             output["std_names"] = []
     output["science_list"] = []
     output["science_names"] = []
-    if return_lamps:
-        output["science_lamps"] = []
+    if return_other_cols and (len(column_headers)>3):
+        for col_header in column_headers[3:]:
+            output["science_{}".format(col_header)] = []
 
     # read in list of files
     image_list = at.read(imagelist,data_start=0,
@@ -84,35 +84,43 @@ def read_list(imagelist,
             if target_type == science_type:
                 output["science_list"].append(image_list["ccdno"][j])
                 output["science_names"].append(image_list["target"][j])
-                if return_lamps:
-                     output["science_lamps"].append(image_list[lamp_header][j])
+                if return_other_cols:
+                    for col_header in column_headers[3:]:
+                        output["science_{}".format(col_header)
+                               ].append(image_list[col_header][j])
+                else:
+                    continue
             else:
                 continue
 
     if return_regions:
-        output["good_region"] = image_list[data_header][0]
-        output["overscan_region"] = image_list[bias_header][0]
+        output["good_region"] = image_list["image_region"][0]
+        output["overscan_region"] = image_list["bias_region"][0]
 
     return output
 
 def read_reduction_list(imagelist,obj_types=["obj","std","flat","bias","lamp"],
-                        science_types=["obj","std"],return_regions=True,
-                        return_lamps=True):
+                        science_types=["obj","std"],return_regions=True):
+    """ read the list of files to be reduced that was output by MODprep.pro """
     output = read_list(imagelist,obj_types=obj_types,science_types=science_types,
-                       return_regions=return_regions,return_lamps=return_lamps)
+                       return_regions=return_regions,return_other_cols=True)
+    junk = output.pop("science_image_region")
+    junk = output.pop("science_bias_region")
     return output
 
 def read_OI_shifts(shiftlist,science_types=["obj","std"]):
+    """ read the list of files that was output by OIshift_corr.pro 
+    """
     output = read_list(shiftlist,column_headers=["ccdno","type","target",
                                                  "shift","shift_err","shift_qual"],
                        obj_types=science_types,science_types=science_types,
-                       return_regions=False,return_lamps=False)
+                       return_regions=False,return_other_cols=True)
     return output
 
 def generate_shift_list(imagelist,output_filename,science_types=["obj","std"]):
     """ 
     takes the original list created by MODprep.pro and removes all calibration
-    files. The output list can be used to run OIshift_corr.pro and shift.py
+    files. The output list can be used to run OIshift_corr.pro and fluxcal.py
     """
 
     image_list = at.read(imagelist,data_start=0,

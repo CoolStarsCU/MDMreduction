@@ -81,7 +81,7 @@ from pyraf.iraf import system, twodspec, longslit, apextract, onedspec, astutil
 
 from list_utils import read_reduction_list
 
-def raw2extract(imagelist):
+def raw2extract(imagelist,apall_interactive='yes'):
 
 # get subsets of spectra: flats, lamps, biases, objects and std spectra
 
@@ -288,7 +288,7 @@ def raw2extract(imagelist):
     iraf.noao.twodspec.apextract.apall.format = 'multispec'
     iraf.noao.twodspec.apextract.apall.references = ''
     iraf.noao.twodspec.apextract.apall.profiles = ''
-    iraf.noao.twodspec.apextract.apall.interactive = 'yes'#'no'#
+    iraf.noao.twodspec.apextract.apall.interactive = apall_interactive
     iraf.noao.twodspec.apextract.apall.find = 'yes'
     iraf.noao.twodspec.apextract.apall.recenter = 'yes'
     iraf.noao.twodspec.apextract.apall.resize = 'yes'

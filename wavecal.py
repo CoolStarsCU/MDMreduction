@@ -42,7 +42,7 @@ from pyraf.iraf import system, twodspec, longslit, apextract, onedspec, astutil
 
 from list_utils import read_reduction_list
 
-def wavecal(imagelist):
+def wavecal(imagelist,reference_lamp=None):
 
 # get subsets of spectra: flats, lamps, biases, objects and std spectra
 
@@ -63,7 +63,8 @@ def wavecal(imagelist):
     
 # now identify lamp features
 
-    reference_lamp = lamp_list[0]
+    if reference_lamp is None:
+        reference_lamp = science_lamps[0]
 
     iraf.noao.onedspec.identify(images = 'lamp.'+reference_lamp)
 

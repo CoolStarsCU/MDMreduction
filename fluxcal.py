@@ -111,7 +111,10 @@ def fluxcal(imagelist):
 #    iraf.noao.onedspec.calibrate.exptime = 'QEXPTIME'
 
     # find the max and min regions used by the sensitivity function
-    sensfunc_log = at.read("sensfunclog",data_start=6)
+    # first calculate the starting line of data in sensfunclog
+    # because it depends on the number of standard stars
+    sf_start = 7 + numstds
+    sensfunc_log = at.read("sensfunclog",data_start=sf_start)
     sensfunc_wave = sensfunc_log['col1']
 
     # Final flux calibration 

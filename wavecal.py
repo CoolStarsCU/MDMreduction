@@ -42,7 +42,26 @@ from pyraf.iraf import system, twodspec, longslit, apextract, onedspec, astutil
 
 from list_utils import read_reduction_list
 
-def wavecal(imagelist,reference_lamp=None):
+def combine_lamps(hgne_lamp,xe_lamp,output_lamp):
+    """ combine Xenon and HgNe lamps to use both sets of lines together"""
+    print "combining HgNe: {} and Xe: {}".format(hgne_lamp,xe_lamp)
+
+    xe_temp = "temp."+xe_lamp+".fits"
+    # multiply the xenon lamp so that its lines show up stronger 
+    # against the HgNe lines
+    noao.onedspec.sarith(xe_lamp,"*",3.0,xe_temp)
+    print "made new Xe lamp"
+    noao.onedspec.sarith(xe_temp,"+",hgne_lamp,output_lamp)
+    print "made new combination lamp"
+
+    # now delete the temporary lamp
+    os.remove(xe_temp)
+
+    # return the name of the new lamp
+    return output_lamp
+    
+
+def wavecal(imagelist,hgne_lamp=None,xe_lamp=None):
 
 # get subsets of spectra: flats, lamps, biases, objects and std spectra
 
@@ -62,20 +81,27 @@ def wavecal(imagelist,reference_lamp=None):
     numstds = len(std_list)
     
 # now identify lamp features
-
-    if reference_lamp is None:
+    
+    # If an HgNe lamp and Xe lamp are provided, combine them
+    if (hgne_lamp is not None) and (xe_lamp is not None):
+        print "creating new reference lamp lamp.HgNeXe"
+        new_ref_lamp = combine_lamps("lamp."+hgne_lamp,"lamp."+xe_lamp,
+                                     "lamp.HgNeXe")
+        reference_lamp = "HgNeXe"
+    # If there's only an HgNe lamp, that's the reference lamp
+    # (means that it's HgNe+Ne)
+    elif (hgne_lamp is not None) and (xe_lamp is None):
+        print "using HgNe reference lamp"
+        reference_lamp = hgne_lamp
+    # Otherwise just use the first lamp on reduction list
+    else:
         reference_lamp = science_lamps[0]
+        print "reference lamp is " + reference_lamp
 
     iraf.noao.onedspec.identify(images = 'lamp.'+reference_lamp)
 
-# now apply lamp solution to the rest of the lamps
-# not that it matters since we apply the first lamp to everything anyway
-
-    for lamp_file in lamp_list:
-         iraf.noao.onedspec.reidentify(reference = 'lamp.'+reference_lamp,  
-                                       images = 'lamp.'+lamp_file)
-
-# now apply the appropriate lamp to each spectrum - missing?
+# applying the lamp spectrum to the other lamps shouldn't matter, 
+# because we're only using the reference lamp anyway
 
 # now apply lamp to science objects
 
@@ -91,7 +117,7 @@ def wavecal(imagelist,reference_lamp=None):
 
     for j,science_file in enumerate(science_list):
         iraf.noao.onedspec.refspec(input = 'extract/ex.' + science_file, 
-                                   reference = 'lamp.'+science_lamps[j])
+                                   reference = 'lamp.'+reference_lamp)
         iraf.noao.onedspec.dispcor(input = 'extract/ex.' + science_file, 
                                    output = 'wavecal/wc.' + science_file)
         iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + science_file, 

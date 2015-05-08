@@ -7,13 +7,14 @@ have three terminal windows open: one regular terminal to access the directory, 
 All commands:
 .com MODprep.pro
 MODPREP
-import raw2extract, wavecal, shift, fluxcal
-raw2extract.raw2extract("to_reduce.lis")
-wavecal.wavecal('to_wavecal.lis')
+import raw2extract, wavecal, shift, fluxcal, list_utils
+raw2extract.raw2extract("to_reduce.lis",apall_interactive="yes")
+wavecal.wavecal('to_reduce.lis',hgne_lamp=None,xe_lamp=None)
+list_utils.generate_shift_list("to_reduce.lis","to_shift.lis")
 .com OIshift_corr
 OIshift_corr, 'to_shift.lis'
 shift.shift('OI_shifts.tbl')
-fluxcal.fluxcal('to_shift.lis')
+fluxcal.fluxcal('to_reduce.lis')
 
 To redo raw2extract, wavecal/shift, and fluxcal (respectively):
 rm -fr cleaned/ extract/ flattened/ trimmed/ lamp* logfile master* normflat.fits 
@@ -22,10 +23,8 @@ rm -rf finals sens* stdfile
 
 After MODPREP, edit to_reduce.lis to remove Xe lamps and disambiguate multiple exposures of the same target
 
-copy to_reduce.lis -> to_wavecal.lis, remove biases and flasts
-
-copy to_wavecal.lis -> to_shift.lis, remove lamps
-
+Do not need to edit to_reduce.lis by hand at all after this. 
+There's a function in list_utils.py that will remove all the calibration files to create to_shift.lis
 
 Detailed version:
 
@@ -35,9 +34,10 @@ Detailed version:
 
 - Edit to_reduce.lis: remove all Xenon lamps, double check object codes (flux standards should be 'std'), give independent exposures of the same target different root names (i.e.,
 GJ699.1,GJ699.2, etc.). 
+- There's a function in list_utils.py that will check if you missed any. 
 
 
-raw2extract.raw2extract('to_reduce.lis')
+raw2extract.raw2extract('to_reduce.lis',apall_interactive='yes')
 
 - Yes, fit masterflat interactively
 - :order [value] changes the order of the fitting function, f reruns the fit. Use w+t and w+b to change top and bottom of the plot, w+a to reset. Double check that the fitting function is really close to the masterflat. 
@@ -49,13 +49,18 @@ raw2extract.raw2extract('to_reduce.lis')
 
 - Sometimes have to delete points (d) to make trace follow the spectrum properly, then type f to refit. The trace should run approximately linearly along the whole ccd. 
 
-- If you have to re-run this (i.e. to refit the masterflat) AND there were no aperture/trace issues the first time through, change raw2extract.py so that line 341 "apall.interactive = 'no'" instead of "yes" and then there's just one interactive Q per spectrum, not sevenish. Then "reload(raw2extract)" and rerun.
+- setting apall_interactive='no' instead of "yes" leaves just one interactive Q per spectrum, not sevenish (only use if you're re-running the task AND there were no problematic apertures/traces on the first run)
 
 
-wavecal.wavecal('to_wavecal.lis')
+wavecal.wavecal('to_reduce.lis',hgne_lamp=None,xe_lamp=None)
+
+- can specify a new reference lamp (as "ccd.###") in the call if desired. If only a HgNe lamp is provided, that will be the reference. If HgNe AND Xe lamps are provided, it will multiply the Xe by 3 (to reduce zooming while ID'ing lines) and co-add the 2 lamps
+
+- The new list_utils functions will automatically ignore the biases and flats. 
 
 - identify lines using images in mdmred directory [note from Steph: I need to add my updated labelled images]
 
+IF YOU HAVE NeHgNe:
 - Identify a few lines across the whole ccd by hand: the Hg lines are good for this since they're not in iraf's database anyway. 
 - Hover over a line, type m, then type in the full wavelength (for Hg lines) or just up to the decimal point (for Ne lines) and type enter
 - Type f, :order 3, f to get an approximate fit, then q to go back to the spectrum. Now it should be in wavelength units instead of pixel units (and if you're using Echelle, the spectrum will be flipped from the pixel version)
@@ -63,7 +68,16 @@ wavecal.wavecal('to_wavecal.lis')
 - Type f to go back to the fitting screen. :order 4 works well for Echelle and gets to 0.05 angstrom rms residuals. Delete any outliers as necessary (d). 
 - q to go back to the spectrum, if the x-axis is wonky or the xgterm prints out 'solution is not monotonic', go back and drop the fit down by an order
 
+IF YOU HAVE Xe and HgNe (so basically no Ne):
+- ID ~a dozen lines, including the 5460, 5769, and 5790 Hg lines. The 4358 Hg line may be harder to find. 
+- type f, :order 5 works well, may have to delete 1-2 points (just delete Xe points or the 4358 Hg line, other 3 Hg lines are easily identified)
+
 - the wavelength solution is stored in database/
+
+
+To produce list for shifting:
+
+
 
 Use sky lines to refine the wavelength calibration
 In IDL:
@@ -80,14 +94,19 @@ shift.shift('OI_shifts.tbl')
 - hit enter all the way through, applying the calculated shifts to the data spectra
 
 
-fluxcal.fluxcal('to_shift.lis')
+fluxcal.fluxcal('to_reduce.lis')
 
-- If a standard was observed twice (so its files have .1, .2 in them) have to type the name in by hand when iraf queries
+- The new list_utils functions will automatically ignore the biases and flats and lamps. (Doesn't need the shifts so don't use to_shift.lis anymore)
+
+- If a standard was observed twice (so its files have .1, .2 in them) the code will strip everything after the first period so you don't have to type the name in. 
+
 - 'yes' to editing bandpasses by hand. Remove telluric and other absorption features, and cosmic rays if needed. q to quit.
 - 'yes' to fitting the sensitivity function by hand.  :order 3 is usually good. g to refit (unlike every other iraf program)
 - The 5000-7500 \AA region is the most relevant, and the residuals (bottom panel) should be approximately flat there. Delete points from the ends (d+p) until the residuals are flat in the important region. 
 
-- Use splot to plot one of the standards and make sure it looks ok (I'll put a reference for Feige34 in the mdmred folder). They should show approximately a blackbody, with some absorption. Sometimes tellurics are impossible to remove, just live with it.  
+- The program will trim everything outside the region where standard star datapoints were used to constrain the sensitivity fit. This conveniently also removes the mess at the very blue and red ends that makes plotting come out badly. 
+
+- Use splot to plot one of the standards and make sure it looks ok. They should show approximately a blackbody, with some absorption. Sometimes tellurics are impossible to remove, just live with it.  
 - If the standard(s) look good, check the other spectra too. 
 - Co-add as needed with sarith task
 

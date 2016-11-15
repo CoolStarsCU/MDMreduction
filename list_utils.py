@@ -2,7 +2,39 @@
 # (which I should convert to python...)
 
 import astropy.io.ascii as at
+import astropy.io.fits as fits
 import numpy as np
+
+def MODprep(input_file, output_file, reference_lamp):
+    
+    infile = at.read("input_file",data_start=0)
+    names = infile["col1"]
+
+    f = open(output_file
+
+    for i, name in enumerate(names):
+        
+        hdu = fits.open(name)
+        imgtyp = hdu[0].header["IMAGETYP"].trim().upper()
+        datareg = hdu[0].header["DATASEC"].trim()
+        biasreg = hdu[0].header["BIASSEC"].trim()
+        obj_name = hdu[0].header["OBJECT"].trim()
+
+        if imgtyp in ["FOCUS", "LAMP", "LAMPS"]:
+            type = "lamp"
+        elif imgtyp=="BIAS":
+            type = "bias"
+        elif imgtyp=="OBJECT":
+            type = "obj"
+        elif "FLAT" in imgtyp:
+            type = "flat"
+        elif imgtyp=="STANDARD":
+            type = "std"
+        else:
+            print "TYPE {0} NOT KNOWN".format(imgtyp)
+
+        f.write("{},{},{},{}\n".format(name
+
 
 def read_list(imagelist,
               column_headers=["ccdno","type","target","image_region",

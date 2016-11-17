@@ -1,13 +1,13 @@
 Brief version: 
 
-Copy IDL reduction scripts into the data directory (MODprep.pro, OIshift_corr.pro), pyraf scripts in PYTHONPATH
+Copy IDL reduction scripts into the data directory (MODprep.pro, OIshift_corr.pro), make sure that the directory containing mdmred/ is in PYTHONPATH (i.e. the mdmred module is found at /home/stephanie/code/mdmred/, so /home/stephanie/code/ is in my PYTHONPATH)
 
 have three terminal windows open: one regular terminal to access the directory, one to run idl in , and an xgterm. In the xgterm, cd to the iraf home directory and launch pyraf, then cd to the data directory.
 
 All commands:
 .com MODprep.pro
 MODPREP
-import raw2extract, wavecal, shift, fluxcal, list_utils
+from mdmred import raw2extract, wavecal, shift, fluxcal, list_utils
 raw2extract.raw2extract("to_reduce.lis",apall_interactive="yes")
 wavecal.wavecal('to_reduce.lis',hgne_lamp=None,xe_lamp=None)
 list_utils.generate_shift_list("to_reduce.lis","to_shift.lis")
@@ -16,7 +16,7 @@ OIshift_corr, 'to_shift.lis'
 shift.shift('OI_shifts.tbl')
 fluxcal.fluxcal('to_reduce.lis')
 
-To redo raw2extract, wavecal/shift, and fluxcal (respectively):
+To redo raw2extract, wavecal/shift, and fluxcal (respectively), run these lines in the data directory:
 rm -fr cleaned/ extract/ flattened/ trimmed/ lamp* logfile master* normflat.fits 
 rm -fr wavecal/ database/ OI_shifts.tbl 
 rm -rf finals sens* stdfile
@@ -40,14 +40,15 @@ GJ699.1,GJ699.2, etc.).
 raw2extract.raw2extract('to_reduce.lis',apall_interactive='yes')
 
 - Yes, fit masterflat interactively
-- :order [value] changes the order of the fitting function, f reruns the fit. Use w+t and w+b to change top and bottom of the plot, w+a to reset. Double check that the fitting function is really close to the masterflat. 
+- Dispersion axis is 2 (along columns)
+- :order [value] changes the order of the fitting function, f reruns the fit. Use w+t or w+b to set mouse position to the top or bottom of the plot, w+a to reset. Double check that the fitting function is really close to the masterflat. q to quit out of the graphics window.
 
-- Have to hit enter/q all the way through the interactive aperture and trace functions. Note that if the input prompt doesn't appear in the xgterm, it's in the graphics window! If the red crosshairs appear, type q instead of enter.
+- Have to hit enter/q all the way through the interactive aperture and trace functions. Note that if the input prompt doesn't appear in the xgterm, it's in the graphics window! Type enter in the bottom of the graphics window when those promps appear there. If the red crosshairs appear, type q instead of enter.
 
 - If there are multiple stars on the slit and apall has selected the wrong trace, hover over the incorrect trace and type "d", then hover over the right trace and type "m". 
-- Hit b to see the background fit, q to go back - then the background windows will have moved to the new star selection.
+- Hit b to see the background fit, q to go back - then the background windows will have moved to the new star selection. 
 
-- Sometimes have to delete points (d) to make trace follow the spectrum properly, then type f to refit. The trace should run approximately linearly along the whole ccd. 
+- Sometimes have to delete points (hover over and type "d") to make trace follow the spectrum properly, then type f to refit. The trace should run approximately linearly along the whole ccd. 
 
 - setting apall_interactive='no' instead of "yes" leaves just one interactive Q per spectrum, not sevenish (only use if you're re-running the task AND there were no problematic apertures/traces on the first run)
 
@@ -77,10 +78,12 @@ IF YOU HAVE Xe and HgNe (so basically no Ne):
 
 To produce list for shifting:
 
+list_utils.generate_shift_list("to_reduce.lis","to_shift.lis")
 
 
 Use sky lines to refine the wavelength calibration
 In IDL:
+.com OIshift_corr
 OIshift_corr, 'to_shift.lis'
 type 'ccd.###' for the reference sky image
 
@@ -88,7 +91,7 @@ type 'ccd.###' for the reference sky image
 - hit enter all the way through, check for bad shifts
 - Spits out "% Program caused arithmetic error: Floating underflow", but that doesn't seem to affect anything
 
-
+Back in Pyraf:
 shift.shift('OI_shifts.tbl')
 
 - hit enter all the way through, applying the calculated shifts to the data spectra
@@ -100,8 +103,8 @@ fluxcal.fluxcal('to_reduce.lis')
 
 - If a standard was observed twice (so its files have .1, .2 in them) the code will strip everything after the first period so you don't have to type the name in. 
 
-- 'yes' to editing bandpasses by hand. Remove telluric and other absorption features, and cosmic rays if needed. q to quit.
-- 'yes' to fitting the sensitivity function by hand.  :order 3 is usually good. g to refit (unlike every other iraf program)
+- 'yes' to editing bandpasses by hand. Remove telluric and other absorption features, and cosmic rays if needed. f to refit, q to quit. Will repeat for each standard star.
+- 'yes' to fitting the sensitivity function by hand.  :order 3 is usually good. g to refit (unlike every other iraf program), and q to quit
 - The 5000-7500 \AA region is the most relevant, and the residuals (bottom panel) should be approximately flat there. Delete points from the ends (d+p) until the residuals are flat in the important region. 
 
 - The program will trim everything outside the region where standard star datapoints were used to constrain the sensitivity fit. This conveniently also removes the mess at the very blue and red ends that makes plotting come out badly. 

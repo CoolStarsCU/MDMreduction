@@ -5,35 +5,38 @@ import astropy.io.ascii as at
 import astropy.io.fits as fits
 import numpy as np
 
-def MODprep(input_file, output_file, reference_lamp):
+def MODprep(input_file, output_file, reference_lamp, 
+            data_section="[1:400]", bias_section="[401:464]"):
     
     infile = at.read("input_file",data_start=0)
     names = infile["col1"]
 
-    f = open(output_file
+    with open(output_file,"w") as f:
 
-    for i, name in enumerate(names):
+        for i, name in enumerate(names):
         
-        hdu = fits.open(name)
-        imgtyp = hdu[0].header["IMAGETYP"].trim().upper()
-        datareg = hdu[0].header["DATASEC"].trim()
-        biasreg = hdu[0].header["BIASSEC"].trim()
-        obj_name = hdu[0].header["OBJECT"].trim()
-
-        if imgtyp in ["FOCUS", "LAMP", "LAMPS"]:
-            type = "lamp"
-        elif imgtyp=="BIAS":
-            type = "bias"
-        elif imgtyp=="OBJECT":
-            type = "obj"
-        elif "FLAT" in imgtyp:
-            type = "flat"
-        elif imgtyp=="STANDARD":
-            type = "std"
-        else:
-            print "TYPE {0} NOT KNOWN".format(imgtyp)
-
-        f.write("{},{},{},{}\n".format(name
+            hdu = fits.open(name)
+            imgtyp = hdu[0].header["IMAGETYP"].trim().upper()
+            datareg = hdu[0].header["DATASEC"].trim()
+            biasreg = hdu[0].header["BIASSEC"].trim()
+            obj_name = hdu[0].header["OBJECT"].trim()
+    
+            if imgtyp in ["FOCUS", "LAMP", "LAMPS"]:
+                category = "lamp"
+            elif imgtyp=="BIAS":
+                category = "bias"
+            elif imgtyp=="OBJECT":
+                category = "obj"
+            elif "FLAT" in imgtyp:
+                category = "flat"
+            elif imgtyp=="STANDARD":
+                category = "std"
+            else:
+                print("TYPE {0} NOT KNOWN".format(imgtyp))
+                category = ""
+    
+            f.write("{},{},{},{},{}\n".format(name,category,
+                    data_section,image_section,name)
 
 
 def read_list(imagelist,

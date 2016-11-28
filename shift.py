@@ -62,7 +62,7 @@ def shift(imagelist):
     numstds = len(std_list)
 
 
-# now apply the shift determined by the IDL code to each spectrum, and add lines
+# now apply the shift determined by the code to each spectrum, and add lines
 # in the header to document the shift applied, the error in the shift, and the
 # quality factor of the sky spectrum that was used to derive the shift..
     for j,science_file in enumerate(science_list):

@@ -4,40 +4,42 @@
 import astropy.io.ascii as at
 import astropy.io.fits as fits
 import numpy as np
+import subprocess
 
-def MODprep(input_file, output_file, reference_lamp, 
-            data_section="[1:400]", bias_section="[401:464]"):
+def MODprep(ref_lamp, input_file="MODprep.lis", output_file="to_reduce.lis", 
+            data_section="[1:400,1:2000]", bias_section="[401:464,1:2000]"):
     
-    infile = at.read("input_file",data_start=0)
-    names = infile["col1"]
-
+    subprocess.call("ls *.fit > " + input_file, shell=True)
+    
+    infile = at.read(input_file, data_start=0)
+    names = infile.columns[0].data
+    
     with open(output_file,"w") as f:
-
         for i, name in enumerate(names):
-        
             hdu = fits.open(name)
-            imgtyp = hdu[0].header["IMAGETYP"].trim().upper()
-            datareg = hdu[0].header["DATASEC"].trim()
-            biasreg = hdu[0].header["BIASSEC"].trim()
-            obj_name = hdu[0].header["OBJECT"].trim()
-    
+            imgtyp = hdu[0].header["IMAGETYP"].strip().upper()
+            #datareg = hdu[0].header["DATASEC"].strip()
+            #biasreg = hdu[0].header["BIASSEC"].strip()
+            obj_name = hdu[0].header["OBJECT"].strip()
+            
             if imgtyp in ["FOCUS", "LAMP", "LAMPS"]:
                 category = "lamp"
-            elif imgtyp=="BIAS":
+            elif imgtyp == "BIAS":
                 category = "bias"
-            elif imgtyp=="OBJECT":
+            elif imgtyp == "OBJECT":
                 category = "obj"
             elif "FLAT" in imgtyp:
                 category = "flat"
-            elif imgtyp=="STANDARD":
+            elif imgtyp == "STANDARD":
                 category = "std"
             else:
                 print("TYPE {0} NOT KNOWN".format(imgtyp))
                 category = ""
-    
-            f.write("{},{},{},{},{}\n".format(name,category,
-                    data_section,image_section,name)
-
+            
+            f.write("{:>14} {:>6} {:>18} {:>16} {:>16} {:>18}\n".format(
+                    name[:-4], category, obj_name, data_section, 
+                    bias_section, ref_lamp))
+        f.close()
 
 def read_list(imagelist,
               column_headers=["ccdno","type","target","image_region",
@@ -144,7 +146,7 @@ def read_reduction_list(imagelist,obj_types=["obj","std","flat","bias","lamp"],
     return output
 
 def read_OI_shifts(shiftlist,science_types=["obj","std"]):
-    """ read the list of files that was output by OIshift_corr.pro 
+    """ read the list of files that was output by OIshift_corr.py
     """
     output = read_list(shiftlist,column_headers=["ccdno","type","target",
                                                  "shift","shift_err","shift_qual"],
@@ -154,7 +156,7 @@ def read_OI_shifts(shiftlist,science_types=["obj","std"]):
 
 def generate_shift_list(imagelist,output_filename,science_types=["obj","std"]):
     """ 
-    takes the original list created by MODprep.pro and removes all calibration
+    takes the original list created by MODprep() and removes all calibration
     files. The output list can be used to run OIshift_corr.pro and fluxcal.py
     """
 
@@ -191,10 +193,10 @@ def check_duplicate_names(science_names):
     unique_names,name_counts = np.unique(science_names,return_counts=True)
 
     if len(unique_names)==len(science_names):
-        print "All target names are unique!"
+        print("All target names are unique!")
         duplicates = False
     else:
-        print "The following names are repeated:"
-        print unique_names[name_counts>1]
+        print("The following names are repeated:")
+        print(unique_names[name_counts>1])
 
     return duplicates

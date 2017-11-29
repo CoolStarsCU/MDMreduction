@@ -1,0 +1,192 @@
+SETUP STEPS =====================================
+
+Make sure that the directory containing mdmred/ is in PYTHONPATH (i.e. the mdmred module is found at .../mdmred/)
+
+Have two terminal windows open:
+1) regular terminal to access the data directory
+2) iraf window, to run xgterm
+
+In the iraf window:
+  cd to the iraf home directory
+  > source activate iraf27
+  > xgterm & (new window pops up; work on this one from now on)
+  > ./runpyraf (this is a script that initializes the pyraf environment)
+  *alternatively*, just type pyraf to initialize pyraf
+  cd to the data directory
+  > from mdmred import raw2extract, wavecal, shift, fluxcal, list_utils, OIshift_corr, OSMOS_bias
+
+Before running code:
+  Verify the image and bias chip sections pre-defined in list_utils.prep() are correct for the raw data at hand:
+  --> Modspec: usually cols(data=1:300,bias=301:364), rows(data and bias=1:2000)
+  --> OSMOS4k: for 4k x 1k images, cols(1:1016) (trim~(5:1010), rows(1:4064) (trim~(10:3500))
+               for 4k x 4k images, cols(1:4128), rows(1:4064)
+  --> OSMOSr4k: for 4k x 1k images, cols(1:1048) (trim~(5:1040), rows(1:4160) (trim~(10:4086))
+                for 4k x 4k images, cols(1:4096), rows(1:4160)
+  In ds9, open one of the images, set the scale to "zscale", and that will reveal the data v. bias sections of the ccd.
+  Verify that all fits images have the same dimensions (flats and lamps in OSMOS queued observations may be cropped differently from science targets). If that is not the case, crop the images as needed before running this routine using list_utils.crop_fits() (step 0a below).
+
+  OSMOS fits files have the header key SLITID (1.2 inner, 3.0 center, ...). If its value is "SLITID=open", that is just a sky image. If these files are in your folder, the code will make sure to ignore them.
+
+
+REDUCTION STEPS =================================
+
+Notes:
+In my Ubuntu, the quotation character is: right Alt + '
+In my mac, the double-quotation character is: Shift + '
+In my mac, the "middle" button is: left Option + left click
+
+In iraf graphics windows, use these commands to crop/zoom:
+    wt
+  wj  wk
+    wb
+To reset zoom: wa
+
+****** For OSMOS ONLY******************
+0a) If needed, crop OSMOS images from 4k x 4k to 4k x 1k or 4k x 0.5k. Normally in OSMOS one takes flats and lamps using the full 4k x 4k CCD. The spectra are taken on an 4k x 1k array. It is also desired to crop images to a 4k x 0.5k array to reduce file sizes. One can crop all images to the same small size ONLY if light from targets all fall roughly in the same CCD area.
+   First, make a file listing all fits files to crop. Use the following function to create the list:
+   > list.utils.makelist('to_crop.lis')
+   Next, open the output file 'to_crop.lis' and remove the names of fits files you don't want to crop.
+   Next, crop the files in the list:
+   > list_utils.crop_fits('to_crop.lis', xsize=XX, ysize=YY, croploc='center', prefix='c_')
+   where XX is the number of pixels in cols, YY in rows, and 'c' is a prefix to add to the new fits filename.
+   The parameter croploc can be 'center'(default), 'centerlow' 'upper right', 'upper left', 'lower left', 'lower right', 'upper center' (see the code for explanation).
+   OSMOSR4K (NAXIS1, NAXIS2) 4k x 4k=(4160, 4096); 4k x 1k=(4160, 1048); 4k x 0.5k=(4160, 524)
+   OSMOS4K  (NAXIS1, NAXIS2) 4k x 4k=(4128, 4064); 4k x 1k=(4128, 1016)
+
+   If you prefer to overwrite the original fits file, then set prefix=None (not recommended).
+
+0b) If needed, correct (i.e. subtract) OSMOS images for bias and gain.
+    First, make a file listing all fits files to subtract. Use the following function to create the list:
+    > list.utils.makelist('to_subtract.lis')
+    Next, open the output file 'to_subtract.lis' and remove the names of fits files you don't want to subtract.
+    Next, run the bias correction function:
+        For OSMOS4K images:  > OSMOS_bias.correct_bias()
+        For OSMOSR4K images: > OSMOS_bias.prock4()
+    The output images have the added suffix 'b' in their names.
+    OSMOS raw images have 4160 columns. After bias correction, the overscan columns are removed, so the output images only have 4096 columns (each quadrant has its own set of overscan columns).
+***************************************
+
+
+1) In iraf window: -------------------------
+  > list_utils.prep('XX', data_section="DATA", bias_section="BIAS")
+  where XX is the filename of the reference lamp to be used for wavelength calibration (step 3 below). The parameters data_section and bias_section specify the arrays in the CCD that contain the data and the bias regions. data_section and bias_section must be a string of the form: "[a:b,c:d]", where a/b are the start/end columns, and c,d are the start/end rows.
+  For OSMOS, bias_section does not need to be specified.
+  For OSMOS, it is recommended to ignore a few columns at both ends of the CCD for the data_section.
+  Modspec:  DATA=[1:300,1:2048],   BIAS=[301:364,1:2048]
+  OSMOS4K:  DATA=[10:4086,5:1040], BIAS: ignore param (assuming a cropped, bias-corrected 4k x 1k array)
+  OSMOSR4K: DATA=[10:4090,1:524],  BIAS: ignore param (assuming a cropped, bias-corrected 4k x 0.5k array)
+  Next, open the output file 'to_reduce.lis':
+    Remove rows containing files that you want to ignore (e.g., uncropped images, sky images, ...)
+    Check that flux standards are labelled 'std' on the second column
+    If an object (or standard) was observed more than once, add ".1", ".2" ... to the end of their names on the third column. The function list_utils.check_duplicate_names() can help you check that you didn't miss any.
+  Save and close file.
+
+
+2) In iraf window: -------------------------
+  > raw2extract.raw2extract(instrument='OSMOSr4k')
+    fit masterflat interactively: Yes
+    dispersion axis: 2 (along columns, for Modspec) or 1 (along lines, for OSMOS)
+  This will iterate over each spectrum.
+  A graphics window pops up with the masterflat:
+    check that the fit closely follows the masterflat
+    to adjust fit, type ':order [value]' in the graphics window, then 'f' to re-run fit. As the fit improves, the RMS value decreases.
+    if red crosshairs appear in graphics window, type q instead of Enter to leave
+  New questions pop up:
+    find apertures for flattened/fl.#: yes
+    number of apertures: 1
+    resize apertures: yes
+    edit apertures: yes
+  New graphics window pops up with trace:
+    check that trace is correct (if incorrect, hover over it and hit 'd'; use 'm' to create new one, then type 'b' to see the background fit, 'q' to go back, then the background windows will have moved to the new star selection)
+    if background regions need to be re-defined: type 'b', then 'wa', use 'z' to delete a region and 's' 's' to define a new one, then hit 'f' to re-fit
+    hit q to exit graph
+  New questions pop up (reply it in the graphics window, not the pyraf command line!):
+    Trace apertures for flattened/fl.#?: yes
+    press Enter two more times (in the graphics window)
+  New graphics window pops up with trace:
+    hover over bad data points considered in the fit (have no diamond) and hit d to ignore them
+    hit f to refit
+    the trace should look linear accross the whole ccd
+    if desired, adit the order of the polygon being fitted using ':order [value]', then f to re-fit. As the fit improves, the RMS value decreases.
+    hit q to exit graph
+    press Enter two more times (in the graphics window)
+  **Note**: If you need to re-do this step and the first time showed all apertures and tracers OK, then re-run raw2extract() with the parameter apall_interactive='no'. This will reduce the number of graphs pop ups.
+
+
+3) In iraf window: -------------------------
+  > wavecal.wavecal(hgne_lamp='XX',xe_lamp=None, ar_lamp=None)
+    where XX is the reference lamp file name (without the .fits extension) (normally one uses the HgNe lamp only, but it can be Ar for OSMOS, or a combination of lamps).
+  Graphics window pops up with reference lamp flattened image:
+    identify a few lines along the CCD by hovering over line, then hit m, then type wavelength value (see reference_spectra/ folder), then hit Enter
+    if working with a wide slit (e.g., 3" slit instead of 1.2") and hitting m is not recognizing line peaks, change the fwidth parameter from the default 4 to 8, before identifying lines; to do this, hit :fwidth 8 Enter
+    hit f :order 3 Enter f q
+    now X-axis is in Angstrom and flipped from left to right
+    hover over the rest of lines to identify them, some are in iraf's database, so just hit m Enter over those
+    hit f to see the residuals of the fit
+    try :order 3 or 4 or 11 (whatever); the idea is to leave small residuals that have no structure
+    if big outliers, hover over them and hit d to ignore them in fit; re-do fit by hitting f
+    when satisfied, hit q to go back to spectrum; if the X-axis is wonky or the xgterm prints out 'solution is not monotonic', go back and drop the fit down by an order
+    hit q
+  New question pops up:
+    Write feature data to the database: yes
+  **Note**: if reference lamp is Xe and HgNe (so basically no Ne), then:
+    ID ~a dozen lines, including the 5460, 5769, and 5790 Hg lines (4358 Hg line may be harder to find)
+    hit f, then :order 5 works well, may have to delete 1-2 points (just delete Xe points or the 4358 Hg line, other 3 Hg lines are easily identified)
+
+
+4) In iraf window: -------------------------
+  > list_utils.generate_shift_list()
+
+5) In iraf window: -------------------------
+  > OIshift_corr.main('XX')
+    where XX is the obj image chosen as reference sky (without the .fits extension), usually a long exposure
+  This will iterate over all object images
+  A graphics window pops up with spectrum near an OH emission line, if there is shift, it will draw the fit in red
+  Pay attention to the shift and error values printed in the iraf window; a large value is a red flag
+  Hit Enter until it finishes iterating
+
+6) In iraf window: -------------------------
+  > shift.shift()
+  This will iterate over all object spectra
+  Ignore error message ("Cannot open image wavecal/preshift...")
+  Question pops up:
+    updated wavecal?: yes
+  Hit Enter until it finishes iterating
+
+7) In iraf window: -------------------------
+  > fluxcal.fluxcal(instrument="OSMOS")
+  Question pops up to confirm star name in calibration list
+  Note: if pyraf shows you a list of std names, it means that you may need to re-enter std name as recognized by pyraf libraries (e.g. bd284211 instead of BD+28d4211)
+  (HD19445 and BD+28d4211 are in the onedstsd@irscal library; Hilt600 and Feige34 are in the onedstds@spec50cal library; if using other standards, code may crash if standard is not in the expected library; see http://stsdas.stsci.edu/cgi-bin/gethelp.cgi?onedstds)
+  Question pops up:
+    Edit bandpasses?: yes
+  Graphics window pops up with spectrum of standard star:
+    to remove points, use 'd'
+    to draw a point, use 'a' (press it once at beginning and once at end of where you want point)
+    For Modspec/Echelle, remove points outside 5000 - 7500 Angstrom
+    (see http://mdm.kpno.noao.edu/Manuals/ModSpec/modspec_man.html)
+    remove telluric features
+    hit q
+  Last three steps are repeated if there is more than one standard star
+  Question pops up:
+    Fit aperture 1 interactively?: yes
+  Graphics window pops up with sensitivity spectrum:
+    if there is more than one standard spectrum, hit 's' to stack them
+    try :order 3 or 11 to get best fit and smallest residuals (order 3 is usually good)
+    to re-fit hit g (not f!!)
+    delete the tail points for a better fit (by hitting d+p on them)
+    the relevant region is 5000-7500 Angstrom (for Modspec), where residuals should be flat
+    hit q when satisfied
+
+8) In regular terminal window: -------------
+  Go to finals/ folder
+  > ls trim*fits > finals.lis
+
+9) In iraf window: -------------------------
+  Go to finals/ folder
+  > splot @finals.lis
+  This will iterate over final spectra in list
+  Use splot to plot one of the standards and make sure it looks ok; they should show approximately a blackbody, with some absorption. Sometimes tellurics are impossible to remove, just live with it.
+
+Co-add as needed with sarith taskin iraf. Example:
+  > sarith 1.fits + 2.fits comb.fits

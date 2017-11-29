@@ -34,20 +34,23 @@
 import os
 
 import numpy as np
-
+from time import sleep
 from pyraf import iraf
 from pyraf.iraf import noao
 from pyraf.iraf import imutil, imred, crutil, ccdred, echelle, images, tv
 from pyraf.iraf import system, twodspec, longslit, apextract, onedspec, astutil
-
+import pdb
 from list_utils import read_reduction_list
 
 def combine_lamps(hgne_lamp,xe_lamp,output_lamp):
-    """ combine Xenon and HgNe lamps to use both sets of lines together"""
-    print "combining HgNe: {} and Xe: {}".format(hgne_lamp,xe_lamp)
+    """
+    Combine Xenon and HgNe lamps to use both sets of lines together.
+    """
 
-    xe_temp = "temp."+xe_lamp+".fits"
-    # multiply the xenon lamp so that its lines show up stronger 
+    print "combining HgNe: {} and Xe: {}".format(hgne_lamp, xe_lamp)
+
+    xe_temp = "temp." + xe_lamp + ".fits"
+    # multiply the xenon lamp so that its lines show up stronger
     # against the HgNe lines
     noao.onedspec.sarith(xe_lamp,"*",3.0,xe_temp)
     print "made new Xe lamp"
@@ -59,15 +62,15 @@ def combine_lamps(hgne_lamp,xe_lamp,output_lamp):
 
     # return the name of the new lamp
     return output_lamp
-    
 
-def wavecal(imagelist,hgne_lamp=None,xe_lamp=None):
 
-# get subsets of spectra: flats, lamps, biases, objects and std spectra
+def wavecal(imagelist="to_reduce.lis", hgne_lamp=None, xe_lamp=None, ar_lamp=None):
+
+    # get subsets of spectra: flats, lamps, biases, objects and std spectra
 
     image_dict = read_reduction_list(imagelist,obj_types=["obj","std","lamp"])
 
-    # split out the relevant lists 
+    # split out the relevant lists
     # and make them arrays for marginally faster readout
     lamp_list = np.array(image_dict["lamp"])
     science_list = np.array(image_dict["science_list"])
@@ -79,31 +82,35 @@ def wavecal(imagelist,hgne_lamp=None,xe_lamp=None):
     numlamps = len(lamp_list)
     numscience = len(science_list)
     numstds = len(std_list)
-    
-# now identify lamp features
-    
+
+    # Identify lamp features
+
     # If an HgNe lamp and Xe lamp are provided, combine them
     if (hgne_lamp is not None) and (xe_lamp is not None):
         print "creating new reference lamp lamp.HgNeXe"
-        new_ref_lamp = combine_lamps("lamp."+hgne_lamp,"lamp."+xe_lamp,
+        new_ref_lamp = combine_lamps("lamp." + hgne_lamp, "lamp." + xe_lamp,
                                      "lamp.HgNeXe")
         reference_lamp = "HgNeXe"
     # If there's only an HgNe lamp, that's the reference lamp
-    # (means that it's HgNe+Ne)
+    # (means that it's Ne + HgNe)
     elif (hgne_lamp is not None) and (xe_lamp is None):
         print "using HgNe reference lamp"
         reference_lamp = hgne_lamp
+    # For OSMOS 4K, there may only be Ar lamps
+    elif ar_lamp is not None:
+        print "using Ar reference lamp"
+        reference_lamp = ar_lamp
     # Otherwise just use the first lamp on reduction list
     else:
         reference_lamp = science_lamps[0]
         print "reference lamp is " + reference_lamp
 
-    iraf.noao.onedspec.identify(images = 'lamp.'+reference_lamp)
+    iraf.noao.onedspec.identify(images = 'lamp.' + reference_lamp)
 
-# applying the lamp spectrum to the other lamps shouldn't matter, 
-# because we're only using the reference lamp anyway
+    # applying the lamp spectrum to the other lamps shouldn't matter,
+    # because we're only using the reference lamp anyway
 
-# now apply lamp to science objects
+    # now apply lamp to science objects
 
     iraf.noao.onedspec.refspec.sort = 'none'
     iraf.noao.onedspec.refspec.group = ''
@@ -116,15 +123,16 @@ def wavecal(imagelist,hgne_lamp=None,xe_lamp=None):
     os.mkdir('wavecal')
 
     for j,science_file in enumerate(science_list):
-        iraf.noao.onedspec.refspec(input = 'extract/ex.' + science_file, 
-                                   reference = 'lamp.'+reference_lamp)
-        iraf.noao.onedspec.dispcor(input = 'extract/ex.' + science_file, 
+        iraf.noao.onedspec.refspec(input = 'extract/ex.' + science_file,
+                                   reference = 'lamp.' + reference_lamp)
+        iraf.noao.onedspec.dispcor(input = 'extract/ex.' + science_file,
                                    output = 'wavecal/wc.' + science_file)
-        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + science_file, 
-                                 output = 'wavecal/wc.' + science_file, 
-                                 bands = '3', format = "onedspec")
-        iraf.noao.onedspec.wspectext(input = 'wavecal/wc.' + science_file + '.2001', 
-                                     output = 'wavecal/sky.' + science_file,  
+        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + science_file,
+                                 output = 'wavecal/wc.' + science_file,
+                                 bands = '3', format = 'onedspec', verbose='no')
+        sleep(1) # pause the code for one second to give it time so save new file
+        iraf.noao.onedspec.wspectext(input = 'wavecal/wc.' + science_file + '.2001',
+                                     output = 'wavecal/sky.' + science_file,
                                      header = 'no')
 
     iraf.flprcache()

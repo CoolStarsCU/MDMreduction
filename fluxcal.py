@@ -18,26 +18,24 @@ from pyraf import iraf
 from pyraf.iraf import noao
 from pyraf.iraf import imutil, imred, crutil, ccdred, echelle, images, tv
 from pyraf.iraf import system, twodspec, longslit, apextract, onedspec, astutil
-
 from list_utils import read_reduction_list
 
-def fluxcal(imagelist):
+def fluxcal(instrument, imagelist="to_reduce.lis"):
 
-# get subsets of spectra: flats, lamps, biases, objects and std spectra
+    # get subsets of spectra: flats, lamps, biases, objects and std spectra
+    # Instrument can be Modspec or OSMOS
 
     image_dict = read_reduction_list(imagelist)
-
     science_list = image_dict["science_list"]
     science_names = image_dict["science_names"]
     std_list = image_dict["std"]
     std_names = image_dict["std_names"]
-    
-# find the number of objects in each list
 
+    # Find the number of objects in each list
     numscience = len(science_list)
     numstds = len(std_list)
-    
-# now do flux calibration - start with setting airmass to middle of exposure
+
+    # Do flux calibration - start with setting airmass to middle of exposure
 
     iraf.astutil.setairmass.observatory = 'kpno'
     iraf.astutil.setairmass.intype = 'middle'
@@ -45,7 +43,10 @@ def fluxcal(imagelist):
     iraf.astutil.setairmass.ra = 'RA'
     iraf.astutil.setairmass.dec = 'DEC'
     iraf.astutil.setairmass.equinox = 'EQUINOX'
-    iraf.astutil.setairmass.st = 'ST'
+    if instrument.upper() == 'OSMOS':
+        iraf.astutil.setairmass.st = 'LST'
+    else:
+        iraf.astutil.setairmass.st = 'ST'
     iraf.astutil.setairmass.ut = 'TIME-OBS'
     iraf.astutil.setairmass.date = 'DATE-OBS'
     iraf.astutil.setairmass.exposure = 'EXPTIME'
@@ -59,9 +60,8 @@ def fluxcal(imagelist):
     for science_file in science_list:
         iraf.astutil.setairmass(images='wavecal/dc.' + science_file)
 
-# run standard on our standard star observations
-
-    iraf.noao.onedspec.standard.samestar = 'no' 
+    # Run standard on our standard star observations
+    iraf.noao.onedspec.standard.samestar = 'no'
     # Frequently observed different stars, changing that value
     iraf.noao.onedspec.standard.beam_switch = 'no'
     iraf.noao.onedspec.standard.apertures = ''
@@ -69,7 +69,10 @@ def fluxcal(imagelist):
     iraf.noao.onedspec.standard.bandsep = '30'
     iraf.noao.onedspec.standard.fnuzero = '3.68E-20'
     iraf.noao.onedspec.standard.extinction = 'onedstds$kpnoextinct.dat'
-    iraf.noao.onedspec.standard.caldir = 'onedstds$spec50cal/'
+    if instrument.upper() == 'OSMOS':
+        iraf.noao.onedspec.standard.caldir = 'onedstds$irscal/'
+    else:
+        iraf.noao.onedspec.standard.caldir = 'onedstds$spec50cal/'
     iraf.noao.onedspec.standard.observatory = 'KPNO'
     iraf.noao.onedspec.standard.interact = 'yes'
     iraf.noao.onedspec.standard.graphics = 'stdgraph'
@@ -78,11 +81,10 @@ def fluxcal(imagelist):
     for i,std_file in enumerate(std_list):
         this_std_name = std_names[i].split(".")[0]
         iraf.noao.onedspec.standard.star_name = this_std_name
-        iraf.noao.onedspec.standard(input = 'wavecal/dc.' + std_file, 
-                                    output = 'stdfile')
-    
-# now run sensfunc to get sensitivity functions out
+        iraf.noao.onedspec.standard(input = 'wavecal/dc.' + std_file,
+                                   output = 'stdfile')
 
+    # Run sensfunc to get sensitivity functions out
     iraf.noao.onedspec.sensfunc.apertures = ''
     iraf.noao.onedspec.sensfunc.ignoreaps = 'yes'
     iraf.noao.onedspec.sensfunc.logfile = 'sensfunclog'
@@ -99,8 +101,7 @@ def fluxcal(imagelist):
 
     iraf.noao.onedspec.sensfunc(standards = 'stdfile', sensitivity = 'sens', newextinction = 'extinct.dat')
 
-# then use those sensitivity functions to calibrate the data
-
+    # Use those sensitivity functions to calibrate the data
     iraf.noao.onedspec.calibrate.extinct = 'yes'
     iraf.noao.onedspec.calibrate.flux = 'yes'
     iraf.noao.onedspec.calibrate.extinction = 'onedstds$kpnoextinct.dat'
@@ -117,7 +118,7 @@ def fluxcal(imagelist):
     sensfunc_log = at.read("sensfunclog",data_start=sf_start)
     sensfunc_wave = sensfunc_log['col1']
 
-    # Final flux calibration 
+    # Final flux calibration
     # and trimming beyond the good flux calibration region
     os.mkdir('finals')
 
@@ -128,6 +129,7 @@ def fluxcal(imagelist):
         iraf.noao.onedspec.scopy(input='finals/' + science_names[j],
                                  output = 'finals/trim.' + science_names[j],
                                  w1=sensfunc_wave[0],w2=sensfunc_wave[-1],
-                                 rebin='no')
-    
+                                 format='multispec', rebin='no', apertures='',
+                                 bands='', verbose='no')
+
     iraf.flprcache()

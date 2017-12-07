@@ -3,7 +3,7 @@
 
 '''
 This script contains functions that correct images for bias.
-The output files have the an added "_b" to their names.
+The output files have the an added "b" to their names.
 '''
 
 import os
@@ -19,26 +19,27 @@ import astropy.io.fits as pyfits
 from list_utils import read_reduction_list
 import pdb
 
-def proc4k(argv='to_subtract.lis', suffix='b', overwrite=True):
+def proc4k(argv='to_subtract.lis', suffix='b', overwrite=False):
     '''
     This function is good for both MDM4K and MDMR4K images.
-    argv - String; it can be the name of a fits file, or the name of an ascii file that contains a list of fits filenames.
-    suffix - String; suffix to add to output filename(s).
-    overwrite - Boolean; whether to overwrite the input file(s) with the output. Note that if overwrite=True and suffix is not None, the overwritten name of the overwritten file with be updated to reflect the suffix specified in this function.
 
-    This function is directly copied from proc4k.py by Paul Martini (OSU) and slightly edited.
+    This function is copied from proc4k.py by Paul Martini (OSU) and slightly edited.
     It performs the overscan subtraction and remove the relative gain differences for a single R4K image or a list of R4K images.
     Steps:
     1. determine if input is a file or list of files
     2. identify binning, size of overscan
     3. remove overscan and trim
-    4. remove relative gain variations (TBD)
+    4. remove relative gain variations (Note: Gain for MDMR4K detector is still unknown as of 2017-11.)
+
+    argv - String; it can be the name of a fits file, or the name of an ascii file that contains a list of fits filenames.
+    suffix - String; suffix to add to output filename(s).
+    overwrite - Boolean; whether to overwrite the input file(s) with the output. Note that if overwrite=True and suffix is not None, the name of the overwritten file with be updated to reflect the suffix specified.
+
+    Version 1.2: made it Python 3.0 friendly. Modified script to turn it into a function, with three input parameters. Parameter argv was modified to make it possible to input a single filename or a list of filenames in an ascii file. Read-out of fits image data is now explicit to be a numpy.int32 type.
     '''
 
-    # Version and Date
-    # Version 1.2: made it Python 3.0 friendly. Modified script to turn it into a function, with three input parameters. Parameter argv was modified to make it possible to input a single filename or a list of filenames in an ascii file.
     versNum = "1.2.0"
-    versDate = "2011-11-20"
+    versDate = "2017-11-30"
 
     # Define some variables
     Debug=False
@@ -121,7 +122,6 @@ def proc4k(argv='to_subtract.lis', suffix='b', overwrite=True):
         outnaxis2 = r4 - r1 + 1		# 1048 rows in output, trimmed image
         collen = int(0.5*outnaxis1)	# number of rows in an image quadrant
         rowlen = int(0.5*outnaxis2)	# number of rows in an image quadrant
-
         #
         # Assumed layout: (ds9 perspective)
         #
@@ -139,7 +139,7 @@ def proc4k(argv='to_subtract.lis', suffix='b', overwrite=True):
           print(' q3: [%d:%d,%d:%d]' % (c3+1, c4+1, r1+1, r2+1))
           print(' q4: [%d:%d,%d:%d]' % (c3+1, c4+1, r3+1, r4+1))
         # Calculate the bias level for each amplifier
-        data = fitsfile[0].data
+        data = fitsfile[0].data.astype(np.int32) # A different Numpy version may read the data array as type uint16. Not good.
         # identify the columns to use to calculate the bias level
         # skip the first and last columns of the overscan
         # changed to 'list' for hiltner due to primitive python version
@@ -247,7 +247,6 @@ def proc4k(argv='to_subtract.lis', suffix='b', overwrite=True):
         ##########################################################################
         # Subtract the bias from the output
         ##########################################################################
-
         if BiasType == BiasSingle:
           OverscanKeyValue = 'BiasSingle'
           # subtract a single bias value for each amplifier
@@ -313,7 +312,6 @@ def proc4k(argv='to_subtract.lis', suffix='b', overwrite=True):
           OverscanKeyValue = 'BiasRow'
           # subtract a bias value for each row of each amplifier
           #print r1, r2, len(bias_q1e)
-          suffix = 'b'
           for i in range(r1, r2, 1):
             data[i,cols_q1e] -= bias_q1e[i]
             data[i,cols_q1o] -= bias_q1o[i]
@@ -393,19 +391,21 @@ def proc4k(argv='to_subtract.lis', suffix='b', overwrite=True):
         #BiasKeyValue = '%s' % (versNum)
         #BiasKeyComment = 'Gain removed by proc4k.py'
 
-        if OSMOS: 	# prevent a pyfits error if these are not assigned values
-            fitsfile[0].remove('MISFILT', ignore_missing=True)
-            fitsfile[0].remove('MISFLTID', ignore_missing=True)
-            fitsfile[0].insert('GPROBEX', ('MISFLTID', -1, 'MIS Filter ID'))
-            fitsfile[0].insert('GPROBEX', ('MISFILT', -1, 'MIS Filter Number'))            
-            
-            # This doesn't work when the key card is corrupt, like with OSMOS.
-#           try:
-#             fitsfile[0].header['MISFILT'] = -1
-#             fitsfile[0].header['MISFLTID'] = -1
-#           except:
-#             if Debug:
-#               print('Note: MISFILT and MISFLTID keywords not found')
+        if OSMOS:
+            # Prevent a Pyfits error when these are not assigned values
+            try:
+                fitsfile[0].header.remove('MISFILT', ignore_missing=True)
+                fitsfile[0].header.remove('MISFLTID', ignore_missing=True)
+                fitsfile[0].header.insert('GPROBEX', ('MISFLTID', -1, 'MIS Filter ID'))
+                fitsfile[0].header.insert('GPROBEX', ('MISFILT', -1, 'MIS Filter Number'))
+            except:
+                if Debug:
+                    print('Note: MISFILT and MISFLTID keywords not found')
+
+            # Correct the wrong date format in OSMOS R4K images
+            tmpdate = fitsfile[0].header['DATE-OBS'].split('T')
+            if len(tmpdate) > 1:
+                fitsfile[0].header['DATE-OBS'] = tmpdate[0]
 
         fitsfile[0].header['BIASPROC'] = (OverscanKeyValue, OverscanKeyComment)
         #fitsfile[0].header.update('BIASVER', BiasKeyValue, BiasKeyComment)
@@ -446,28 +446,34 @@ def proc4k(argv='to_subtract.lis', suffix='b', overwrite=True):
         fitsfile.close()
 
 
-
-def correct_bias(imagelist='to_subtract.lis', suffix='b'):
+def correct_bias(argv='to_subtract.lis', suffix='b', overwrite=False):
     '''
-    This function is good for MDM4K images only.
+    This function is good for MDM4K images only. It performs the same procedures as proc4k.
+
+    imagelist - String. it can be the name of a fits file, or the name of an ascii file that contains a list of fits filenames.
+    suffix - String; suffix to add to output filename(s).
+    overwrite - Boolean; whether to overwrite the input file(s) with the output. Note that if overwrite=True and suffix is not None, the name of the overwritten file with be updated to reflect the suffix specified.
     '''
 
-    # Read input file
-    image_dict = read_reduction_list(imagelist)
-    flat_list = np.array(image_dict["flat"])
-    lamp_list = np.array(image_dict["lamp"])
-    science_list = np.array(image_dict["science_list"])
-    list_toreduce = np.concatenate((flat_list,lamp_list,science_list))
+    # Determine type of input
+    files = []
+    if '.fits' in argv:
+        files.append(argv)
+    else:
+        with open(argv, 'r') as infile:
+            for line in infile:
+                files.append(line[:-1]) # [:-1] is to remove the \n
 
-    for lsobj in list_toreduce:
-        print('Correcting ' + lsobj + '...')
+    for fl in files:
+        print('Correcting ' + fl + '...')
+        lsobj = fl.split('.')[0]
 
         # Read data from the fits file
-        iraf.imgets(image=lsobj + '.fits', param='i_naxis1')
+        iraf.imgets(image=fl, param='i_naxis1')
         n1 = int(iraf.imgets.value)
-        iraf.imgets(image=lsobj + '.fits', param='i_naxis2')
+        iraf.imgets(image=fl, param='i_naxis2')
         n2 = int(iraf.imgets.value)
-        iraf.imgets(image=lsobj + '.fits', param='overscnx')
+        iraf.imgets(image=fl, param='overscnx')
         overx = int(iraf.imgets.value)
 
         biassecs = ['[1:' + format(overx) + ',1:' + format(n2/2) + ']',
@@ -501,7 +507,7 @@ def correct_bias(imagelist='to_subtract.lis', suffix='b'):
         for iq in range(4):
             iraf.noao.imred.bias.colbias.bias = biassecs[iq]
             iraf.noao.imred.bias.colbias.trim = trimsecs[iq]
-            iraf.noao.imred.bias.colbias(input = lsobj + '.fits',
+            iraf.noao.imred.bias.colbias(input = fl,
                                 output = lsobj + '.' + format(iq+1) + '.fits')
 
         # Paste back the bias-corrected images into one image of the correct size
@@ -519,3 +525,6 @@ def correct_bias(imagelist='to_subtract.lis', suffix='b'):
         # Clean up
         for iq in range(4):
             iraf.imdel(lsobj + '.' + format(iq+1) + '.fits')
+
+        if overwrite:
+            os.remove(fl)

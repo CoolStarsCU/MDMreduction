@@ -1,75 +1,6 @@
 #!/usr/bin/env python
 #!/user/covey/iraf/mypython
 
-###############################################################################
-# raw2extract.py
-#
-# For MODspec spectra taken at MDM, this pyraf routine helps automate the reduction
-# process from raw images through extracted spectra
-#
-# A typical useage case for this pipeline is:
-#
-#   1. Generate a file listing all your raw spectra.  In the directory with all your observations, run:
-#                       ls *fits > raw_spectra.lis
-#
-#   2. Use the IDL program MODprep.pro to pull several useful parameters out of each stars header.
-#         In IDL, simply run MODprep.pro; when prompted, specify the name of the file listing the
-#         raw spectra, and the file MODprep should write its output to, such as prep_spectra.lis
-#         The output file will have 5 columns: for each spectra, the columns will contain the
-#         filename (1), observation type [std = flux std, obj = science object, flat = flat,
-#         bias = bias, wavelength lamps = lamp] (2), object name (3), data section of the ccd (4),
-#         and overscan region (5).
-#
-#   3. Edit MODprep's output file to:
-#         * find your flux standards, and change their observation type (in the second column) from 'obj' to 'std'
-#         * if an object was observed multiple times, it will (initially) produce multiple spectra: apply
-#           suffixes to the object names in the third column to distinguish them from one another
-#
-#   4. Confirm that you have the raw2extract.py file, as well as those it depends on (sky_checker.py, split_strings.py,
-#         spectra_splitter.py, flat_normalizer.py) in your path or in the directory with your data
-#
-#   5. start pyraf in an xgterm window (make sure pyraf has access to your iraf login.cl file too)
-#
-#   6. import and call the reduction pipeline with:
-#           import raw2extract
-#           raw2extract.raw2extract('prep_spectra.lis') <--- replacing prep_spectra.lis with your file name
-#
-#   7. raw2extract will happily run in the background for a bit; it will keep busy by:
-#         * combining the biases into masterbias.fits
-#         * run ccd proc on all images to apply overscan correction, master bias
-#           correction, and trim images
-#         * clean science images with cosmicrays
-#         * combine flats into masterflat.fits
-#
-#   8. The user will then be asked to help raw2extract to run the RESPONSE task to remove
-#          the large-scale structure in the master flat.  The user should verify that the fit describes
-#          the structure in the flat well; if the fit is poor, the order can be increased (or decreased) with
-#          a :o # command (with the # giving the new order of the fit), followed by an 'f' and 'r' command to
-#          redo the fit and redraw the results.
-#
-#   9. Once the masterflat has been normalized by the response, raw2extract will use normflat.fits to
-#          flat-divide each (2-D) spectrum with ccdproc.
-#
-#   10. raw2extract will then ask the user to help extract the science targets and flux standards.
-#          This will be done with standard apall tasks -- for more on this, see "A User's Guide to
-#          Reducing Slit Spectra with IRAF" by Phil Massey.
-#
-#          ** Quick hints:
-#
-#            * To tweak background, hit b to enter the
-#              background fitting window.  Then you can delete bad background sampling regions with 'z',
-#              outline new regions with 's', redo the fit with 'f', and redraw the graph with 'r'.
-#
-#            * For some reason I can't figure out, some interactive y/n questions can only be answered in the
-#              graphics window or the terminal window.  This means you have to mouse between them once for each
-#              spectrum.  Annoying, but I can't find another solution.
-#
-#Kevin Covey
-#Version 1.0 (Last Modified 3-12-12; segment of former MODpipeline.py code)
-#Stephanie Douglas
-#Version 2.0 (Last Modified 4-23-15)
-###############################################################################
-
 import os
 
 import numpy as np
@@ -84,13 +15,27 @@ import pdb
 
 def raw2extract(instrument, imagelist='to_reduce.lis', apall_interactive='yes'):
     '''
-    Instrument can be Modspec, OSMOS4k, or OSMOSr4k.
+    This function performs the following tasks:
+        * combines the biases into masterbias.fits (for Modspec only)
+        * runs CCD proc on all images to apply overscan correction (Modspec only), master bias correction (Modspec only), and trim images
+        * clean science images with cosmicrays
+        * combine flats into masterflat.fits
+    IMPORTANT: If instrument is OSMOS, then the bias correction steps should be done with OSMOS_bias.py before running this function.
+
+    Once the masterflat has been normalized by the response, the function will use normflat.fits to flat-divide each (2-D) spectrum with ccdproc.
+    The function then asks the user to help extract the science targets and flux standards. This is done with standard apall tasks -- for more on this, see "A User's Guide to Reducing Slit Spectra with IRAF" by Phil Massey.
+
+    instrument - String; it can be Modspec, OSMOS4k, or OSMOSr4k (not case sensitive).
+    imagelist - String; filename (produced by list_utils.prep()) with list of spectra to process .
+    apall_interactive - String; it can be yes or no. Whether to interactively select and fit traces and apertures for each image.
+
+    Kevin Covey
+    version 1.0 (Last Modified 3-12-12; segment of former MODpipeline.py code)
+    Stephanie Douglas
+    version 2.0 (Last Modified 4-23-15)
+    Alejandro Nunez
+    version: 2.1 (Last modified on 2017-11)
     '''
-    # Get subsets of spectra: flats, lamps, biases, objects and std spectra
-    # If instrument is OSMOS4k, then the bias correction steps should be done in
-    # OSMOS_bias.py before running this.
-    # If instrument is OSMOS r4k, then the bias correction steps should be done
-    # using the script proc4k.py before running this.
 
     image_dict = read_reduction_list(imagelist)
 
@@ -187,8 +132,10 @@ def raw2extract(instrument, imagelist='to_reduce.lis', apall_interactive='yes'):
     iraf.noao.imred.ccdred.ccdproc.high_reject = '3.0'
 
     os.mkdir('trimmed')
-
-    iraf.noao.imred.ccdred.ccdproc.biassec = overscanregion
+    if 'OSMOS' in instrument.upper():
+        iraf.noao.imred.ccdred.ccdproc.biassec = ''
+    else:
+        iraf.noao.imred.ccdred.ccdproc.biassec = overscanregion
     iraf.noao.imred.ccdred.ccdproc.trimsec = gooddata
     iraf.noao.imred.ccdred.ccdproc.zero = 'masterbias'
 

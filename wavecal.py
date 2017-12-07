@@ -1,35 +1,14 @@
 #!/usr/bin/env python
 #!/user/covey/iraf/mypython
 
-###############################################################################
-# wavecal.py
-#
-# For MODspec spectra taken at MDM, this pyraf routine helps automate the wavelength
-# calibration process, including the identification of lamp lines, re-identification
-# of additional lamps, and application of wavelength shifts based on the 5577.339
-# OH night sky line.
-#
-# This pipeline should only be run *after* running the MODprep.pro and raw2extract.py scripts.
-#
-# At that point, you should be ready to:
-#
-#   1. save a copy of the file you used to run raw2extract.py (e.g., data.tbl -> towavecal.tbl);
-#      edit to only include lines listing lamps, science targets, and flux standards
-#
-
-#   11. After the spectra have been extracted, MODpipeline will use the first flux standard as a trace to extract the
-#          lamps, and then ask you to identify all the lines.  use 'm' to mark each line with its wavelength,
-#          then 'f' to fit the lines (tweak order with :o # and delete bad points with 'd').  'q' when done, both
-#          with the fitting and the whole process.
-#
-#   12. MODpipeline will then apply that wavelength solution to the flux standards and science targets, linearize
-#          the spectra, and use SETAIRMASS to get ready for flux calibration.
-
-#Kevin Covey
-#Version 1.0 (Last Modified 3-12-12; segment of former MODpipeline.py code)
-#Stephanie Douglas
-#Version 2.0 (Last Modified 4-23-15)
-###############################################################################
+'''
+Kevin Covey
+version 1.0 (Last Modified 3-12-12; segment of former MODpipeline.py code)
+Stephanie Douglas
+version 2.0 (Last Modified 4-23-15)
+Alejandro Nunez
+version 2.1 (Last Modified 2017-11)
+'''
 
 import os
 
@@ -43,9 +22,9 @@ import pdb
 from list_utils import read_reduction_list
 
 def combine_lamps(hgne_lamp,xe_lamp,output_lamp):
-    """
+    '''
     Combine Xenon and HgNe lamps to use both sets of lines together.
-    """
+    '''
 
     print "combining HgNe: {} and Xe: {}".format(hgne_lamp, xe_lamp)
 
@@ -65,9 +44,16 @@ def combine_lamps(hgne_lamp,xe_lamp,output_lamp):
 
 
 def wavecal(imagelist="to_reduce.lis", hgne_lamp=None, xe_lamp=None, ar_lamp=None):
+    '''
+    This function automates the wavelength calibration process, including the identification of lamp lines and re-identification of additional lamps. It applies a wavelength solution to the flux standards and science targets, linearizes the spectra, and uses SETAIRMASS to get ready for flux calibration.
 
-    # get subsets of spectra: flats, lamps, biases, objects and std spectra
+    imagelist - String; filename of list of images to process (output from list_utils.prep())
+    hgne_lamp - String; filename of HgNe lamp (without .fits extension)
+    xe_lamp - String; filename of Xe lamp (without .fits extension)
+    ar_lamp - String; filename of Ar lamp (without .fits extension)
+    '''
 
+    # Read input file
     image_dict = read_reduction_list(imagelist,obj_types=["obj","std","lamp"])
 
     # split out the relevant lists

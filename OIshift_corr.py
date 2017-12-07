@@ -4,11 +4,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pdb
 
-# This whole code was written with Python 3 in mind, but it works OK in Python 2.7, except for an input() vs. raw_input() issue.
+'''
+This code was written with Python 3 in mind, but it works OK in Python 2.7, except for an input() vs. raw_input() issue.
+'''
 
 def fan(array, nfan=None, transpose=False):
     '''
-    Turn a 1D array into a 2D array with nfan number of rows and len(array) number of columns (if transpose=True, then 2D array is transposed).
+    Turn a 1D array into a 2D array with nfan number of rows and len(array) number of columns.
+    nfan - Number; number of rows.
+    transpose - Boolean; whether to transpose 2D array.
     '''
 
     if nfan is None:
@@ -26,7 +30,10 @@ def fan(array, nfan=None, transpose=False):
 
 def fillarr(step, start, stop, fanned=None, transpose=False):
     '''
-    Creates 1D array with values in the range [start-stop] in step steps (last element = stop when possible). If fanned is a number, then 1D array is turned into 2D array using the fan function. If transpose is True, then the fan function transposes the output 2D array.
+    Creates 1D array with values in the range [start-stop] in step steps (last element = stop when possible).
+
+    fanned - Number; 1D array is turned into 2D array using the fan function.
+    transpose - Boolean; whether the fan function transposes the output 2D array.
     '''
 
     if start > stop: return None
@@ -46,9 +53,10 @@ def fillarr(step, start, stop, fanned=None, transpose=False):
 
 def ccpeak(arr1, arr2, radius=None, flagcf=False, flaglag=False):
     '''
-    Locates precise location of the peak in the cross-correlation function between two vectors.
-    If flagcf or flaglag are True, it returns cf and lag arrays as well.
-    It is assumed that arr2 is the reference array.
+    Locates precise location of the peak in the cross-correlation function between two vectors (arr1 and arr2). It is assumed that arr2 is the reference array.
+
+    flagcf - Boolean; whether to return cf array.
+    flaglag - Boolean; whether to return lag array.
     '''
 
     n = len(arr1)
@@ -70,8 +78,8 @@ def ccpeak(arr1, arr2, radius=None, flagcf=False, flaglag=False):
     ind = np.argmax(cf)
 
     srad = 3
-    sublag = lag[max(ind-srad, 0):min(ind+srad, 2.*radius)+1]
-    subcf = cf[max(ind-srad, 0):min(ind+srad, 2.*radius)+1]
+    sublag = lag[max(ind-srad, 0):min(ind+srad, 2*radius)+1]
+    subcf = cf[max(ind-srad, 0):min(ind+srad, 2*radius)+1]
 
     a = np.polyfit(sublag, subcf, 2)
     a = a[::-1]
@@ -93,9 +101,11 @@ def ccpeak(arr1, arr2, radius=None, flagcf=False, flaglag=False):
 
 def main(ref_sky, input_file='to_shift.lis', output_file='OI_shifts.tbl'):
     '''
-    Cross-correlates sky spectra of objects in input_file list against a chosen reference sky spectrum ref_sky, which it usually is a long exposure one. Output file has the wavelength shift, 1-sigma error, and quality factor for each case.
+    Cross-correlates sky spectra of objects in input_file list against a chosen reference sky spectrum ref_sky, which it usually is a long exposure one.
 
     ref_sky - String; filename (without the .fits extension) of spectrum chosen as reference.
+    input_file - String; filename of list of spectra to be shifted.
+    output_file - String; filename of table with three columns: wavelength shift, 1-sigma error, and quality factor for each spectrum in input_file.
     '''
 
     from astropy.modeling import models, fitting

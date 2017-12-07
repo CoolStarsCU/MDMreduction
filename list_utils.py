@@ -16,15 +16,14 @@ def makelist(fname):
     subprocess.call("ls *.fit* > " + fname, shell=True)
 
 
-def prep(ref_lamp, output_file="to_reduce.lis",
-         data_section="[10:4086,1530:2567]", bias_section="[301:364,1:2048]"):
+def prep(ref_lamp, data_section, bias_section="none", output_file="to_reduce.lis"):
     '''
     This function generates an ascii file with information on each image fits file to process.
 
     ref_lamp - String; filename of reference lamp image.
+    data_section - String; specifies the pixel array that covers the data section (format is [a:b,c:d], where ab are the start/finish columns and cd are the start/end rows.)
+    bias_section - String; specifices the pixel array that covers the bias section (format is [a:b,c:d], where ab are the start/end columns and cd are the start/finish rows.) It can be ignored for OSMOS images.
     output_file - String; name of out put ascii text file.
-    data_section - String; specifies the pixel array that covers the data section.
-    bias_section - String; scpecifices the pixel array that covers the bias section (ignore it for OSMOS images).
     '''
     subprocess.call("ls *.fit* > prep.lis", shell=True)
 
@@ -75,44 +74,23 @@ def read_list(imagelist,
               obj_types=["obj","std","flat","bias","lamp"],
               science_types=["obj","std"], return_other_cols=True,
               return_regions=True):
-    """
-    read in an object list made by prep().
-
-    input
-    -----
-    imagelist: string, filename
-        filename for a list of spectra output by prep()
-
-    column_headers: array_like containing strings
-
-    obj_types: array_like containing strings
-        (default = ["obj","std","flat","bias","lamp"])
-        which object types to save from everything in imagelist
-
-    science_types: array_like containing strings (default=["obj","std"])
-        all the object types that are astronomical objects -
-        typically true science targets and flux standards
-
-    return_regions: bool (default=True)
-        if True, output will contain strings for the data and overscan regions
-        keyed by "good_region" and "overscan_region"
-
-    return_lamps: bool (default=True)
-        if True, output will contain a list of reference lamps for the science targets
-        keyed by "science_lamps"
-
-    output
-    ------
-    returns a dictionary keyed by obj_types with the filename bases
-    of each requested type, along with
+    '''
+    Read in an object list made by prep(). It returns a dictionary keyed by obj_types with the filename bases of each requested type, along with:
         "science_list" - filenames for all types in science_types
         "science_names" - target names for all types in science_types
         "science_lamps" - reference lamp for all types in science_types
         "std_names" - names associated with "std" (only if "std" is requested)
-    if requested, also includes
+    If requested, it also includes
         "good_region"
-        "overscan_region"
-    """
+        "overscan_region".
+
+    imagelist - String; filename for a list of spectra (output by prep())
+    column_headers - Array; containing strings
+    obj_types -  Array; containing strings (default = ["obj","std","flat","bias","lamp"]) which object types to save from everything in imagelist
+    science_types - Array; containing strings (default=["obj","std"]) all the object types that are astronomical objects -typically true science targets and flux standards
+    return_regions - Boolean; whether to include in output strings for the data and overscan regions keyed by "good_region" and "overscan_region"
+
+    '''
     output = {}
 
     # set up arrays
@@ -166,7 +144,7 @@ def read_list(imagelist,
 def read_reduction_list(imagelist, obj_types=["obj","std","flat","bias","lamp"],
                         science_types=["obj","std"], return_regions=True):
     '''
-    Read the list of files to be reduced that was output by prep().
+    Read filename of list containing images to reduce (output by prep()).
     '''
 
     output = read_list(imagelist,obj_types=obj_types,science_types=science_types,
@@ -178,8 +156,9 @@ def read_reduction_list(imagelist, obj_types=["obj","std","flat","bias","lamp"],
 
 def read_OI_shifts(shiftlist, science_types=["obj","std"]):
     '''
-    Read the list of files that was output by OIshift_corr.py.
+    Read filename of list of spectra to process (output by OIshift_corr.main()).
     '''
+
     output = read_list(shiftlist,column_headers=["ccdno","type","target",
                                                  "shift","shift_err","shift_qual"],
                        obj_types=science_types,science_types=science_types,
@@ -190,7 +169,7 @@ def read_OI_shifts(shiftlist, science_types=["obj","std"]):
 def generate_shift_list(imagelist="to_reduce.lis", output_filename="to_shift.lis", science_types=["obj","std"]):
     '''
     Takes the original list created by prep() and removes all calibration
-    files. The output list can be used to run OIshift_corr.pro and fluxcal.py.
+    files. The output list can be used as input for OIshift_corr.main() and fluxcal.fluxcal().
     '''
 
     image_list = at.read(imagelist,data_start=0,
@@ -210,7 +189,7 @@ def generate_shift_list(imagelist="to_reduce.lis", output_filename="to_shift.lis
 
 def check_duplicate_names(science_names):
     '''
-    Makes sure that all names in the output target list are unique. Returns a Boolean indicating whether the input list contains duplicated names.
+    Makes sure that all names in the output target list (created by prep()) are unique. Returns a Boolean indicating whether the input list contains duplicated names.
 
     science_names - List of Strings.
     '''
@@ -228,7 +207,7 @@ def check_duplicate_names(science_names):
 
     return duplicates
 
-def crop_fits(fname, xsize, ysize, croploc='center', prefix='c_', suffix=None):
+def crop_fits(fname, xsize, ysize, croploc='center', prefix='c_', suffix=None, overwrite=False):
     '''
     Crop a fits image using the parameters provided. If file has more than one image, it only considers the first one.
 
@@ -238,10 +217,14 @@ def crop_fits(fname, xsize, ysize, croploc='center', prefix='c_', suffix=None):
     croploc - ['center'(default), 'centerlow' 'upper right', 'upper left', 'lower left', 'lower right', 'upper center'], set location around which to crop image. If 'center', then it crops image centered in the image center. If 'upper right', then it crops image to size [xsize,ysize] anchored in the upper right corner, and so on. If 'centerlow', it crops the image using the X location of the center as the center of the new image, and the Y location of the center as the lower anchor of the new image.
     prefix - String, prefix to add to new fits file. If both prefix and suffix are None, the original fits file is overwritten with the new one.
     suffix - String, suffix to add to new fits file. If both prefix and suffix are None, the original fits file is overwritten with the new one.
+    overwrite - Boolean, whether to overwrite the input file(s).  Note that if overwrite=True and prefix and/or suffix is not None, the name of the overwritten file with be updated to reflect the prefix/suffix specified.
 
     Returns:
     - the new fits HDU, including the original header information.
-    - It also saves a copy of the newly created fits file in the same folder as the original file, with an added suffix to its name, if "suffix" is specified.
+    - It also saves a copy of the newly created fits file in the same folder as the original file, with an added suffix to its name, if prefix or suffix is not None and overwrite=False.
+
+    Alejandro Nunez
+    version 1.0 (Last Modified 2017-11)
     '''
 
     import os
@@ -330,7 +313,7 @@ def crop_fits(fname, xsize, ysize, croploc='center', prefix='c_', suffix=None):
         Im = Im[ystart:ystop, xstart-1:xstop]
         FitsHDU[0].data = Im
 
-        # Write it to a new file
+        # Write it to an output file
         if prefix is not None:
             tmpprefix = prefix
         else:
@@ -339,10 +322,13 @@ def crop_fits(fname, xsize, ysize, croploc='center', prefix='c_', suffix=None):
             tmpsuffix = suffix
         else:
             tmpsuffix = ''
-
         OutFile = filepath + tmpprefix + filename + tmpsuffix + '.fits'
-        if os.path.exists(OutFile):
-            os.remove(OutFile)
+        if overwrite:
+            print('  Warning: Overwriting and renaming pre-existing file %s to %s' % (filename, tmpprefix + filename + tmpsuffix))
+            os.remove(fitsfile)
+            if os.path.exists(OutFile):
+                os.remove(OutFile)
         FitsHDU.writeto(OutFile)
+        FitsHDU.close()
 
     return None

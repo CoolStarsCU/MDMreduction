@@ -14,7 +14,7 @@ https://docs.google.com/document/d/1jioZflZijIovh_JiJoAu2kSyVcJq0RCbJglno4V2zyk/
 
 This repo was written and is maintained by the Cool Stars Columbia University (CSCU) group.
 
-Please contact Stephanie Douglas, Marcel Agüeros (marcel at astro.columbia.edu), or Alejandro Núñez (alejo.nunez at gmail.com) before making contributions to the repo.
+Please contact Stephanie Douglas (stephanietdouglas at gmail.com), Marcel Agüeros (marcel at astro.columbia.edu), or Alejandro Núñez (alejo.nunez at gmail.com) before making contributions to the repo.
 
 ### Who do I talk to? ###
 

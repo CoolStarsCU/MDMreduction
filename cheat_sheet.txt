@@ -1,0 +1,49 @@
+from mdmred import raw2extract, wavecal, shift, fluxcal, list_utils, OIshift_corr, OSMOS_bias
+
+****** For OSMOS ONLY******************
+0a) list_utils.makelist('to_crop.lis')
+
+    list_utils.crop_fits('to_crop.lis', xsize=XX, ysize=YY, croploc='centerlow', prefix='c_')
+    4K:  XX=4128, YY=1016 (4k x 1k)
+    R4K: XX=4160, YY=1048 (4k x 1k) OR XX=4160, YY=524 (4k x 0.5k)
+
+0b) list_utils.makelist('to_subtract.lis')
+
+    For 4K CCD ("OSMOS4k"): OSMOS_bias.correct_bias()
+    For R4K CCD ("OSMOSr4k"): OSMOS_bias.proc4k(overwrite=True)
+
+***************************************
+
+1) list_utils.prep("XX", data_section="DATA", bias_section="BIAS") (XX: lamp full filename)
+   Modspec:  DATA=[1:300,1:2048],   BIAS=[301:364,1:2048]
+   OSMOS4K:  DATA=[10:4086,5:1040], BIAS: ignore param
+   OSMOSR4K: DATA=[10:4090,1:524],  BIAS: ignore param
+
+2) raw2extract.raw2extract(instrument='OSMOSr4k') (instrument can be Modspec, OSMOS4k, OSMOSr4k)
+
+3) wavecal.wavecal(hgne_lamp="XX") (XX: lamp filename without .fits extension)
+
+4) list_utils.generate_shift_list()
+
+5) OIshift_corr.main("XX") (XX: reference sky filename without .fits extension)
+
+6) shift.shift()
+
+7) fluxcal.fluxcal(instrument='OSMOS') (instrument can be Modspec or OSMOS)
+
+
+ls trim*fits > finals.lis
+splot @finals.lis
+
+
+TO REDO A STEP, remove relevant output before re-running:
+
+  raw2extract: > rm -fr cleaned/ extract/ flattened/ trimmed/ lamp* logfile master* normflat.fits
+
+  wavecal/shift: > rm -fr wavecal/ database/ OI_shifts.tbl
+
+  fluxcal: > rm -rf finals sens* stdfile
+
+
+TO COADD:
+  > sarith 1.fits + 2.fits comb.fits

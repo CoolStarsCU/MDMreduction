@@ -1,38 +1,7 @@
 #!/usr/bin/env python
 #!/user/covey/iraf/mypython
 
-###############################################################################
-# finalize.py
-#
-# For MODspec spectra taken at MDM, this pyraf routine helps automate the wavelength
-# calibration process, including the identification of lamp lines, re-identification
-# of additional lamps, and application of wavelength shifts based on the 5577.339
-# OH night sky line.
-#
-# This pipeline should only be run *after* running the MODprep.pro and raw2extract.py scripts.
-#
-# At that point, you should be ready to:
-#
-#   1. save a copy of the file you used to run raw2extract.py (e.g., data.tbl -> towavecal.tbl);
-#      edit to only include lines listing lamps, science targets, and flux standards
-#
-
-#   11. After the spectra have been extracted, MODpipeline will use the first flux standard as a trace to extract the
-#          lamps, and then ask you to identify all the lines.  use 'm' to mark each line with its wavelength,
-#          then 'f' to fit the lines (tweak order with :o # and delete bad points with 'd').  'q' when done, both
-#          with the fitting and the whole process.
-#
-#   12. MODpipeline will then apply that wavelength solution to the flux standards and science targets, linearize
-#          the spectra, and use SETAIRMASS to get ready for flux calibration.
-
-#Kevin Covey
-#Version 1.0 (Last Modified 3-12-12; segment of former MODpipeline.py code)
-#Stephanie Douglas
-#Version 2.0 (Last Modified 4-23-15)
-###############################################################################
-
 import os
-
 import numpy as np
 
 from pyraf import iraf
@@ -42,13 +11,24 @@ from pyraf.iraf import system, twodspec, longslit, apextract, onedspec, astutil
 
 from list_utils import read_OI_shifts
 
-def shift(imagelist):
+def shift(imagelist="OI_shifts.tbl"):
 
-# get subsets of spectra: flats, lamps, biases, objects and std spectra
+    '''
+    This function applies wavelength shifts based on the 5577.339 OH night sky line.
 
+    imagelist - String; filename of list of spectra to process (output from OI_shiftcorr.main())
+
+    Kevin Covey
+    version: 1.0 (Last Modified 3-12-12; segment of former MODpipeline.py code)
+    Stephanie Douglas
+    version 2.0 (Last Modified 4-23-15)
+    Alejandro Nunez
+    version 2.1 (Last Modified 2017-11_)
+    '''
+    # Read input file
     image_dict = read_OI_shifts(imagelist,science_types=["obj","std"])
 
-    # split out the relevant lists 
+    # split out the relevant lists
     # and make them arrays for marginally faster readout
     science_list = np.array(image_dict["science_list"])
     science_names = np.array(image_dict["science_names"])
@@ -67,33 +47,33 @@ def shift(imagelist):
 # quality factor of the sky spectrum that was used to derive the shift..
     for j,science_file in enumerate(science_list):
         print 'wavecal/wc.'+science_file
-        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + science_file, 
-                                 output = 'wavecal/preshift.' + science_file,  
+        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + science_file,
+                                 output = 'wavecal/preshift.' + science_file,
                                  bands = '1', format = "onedspec")
         iraf.noao.onedspec.wspectext(
-                    input = 'wavecal/preshift.{}.2001'.format(science_file), 
+                    input = 'wavecal/preshift.{}.0001'.format(science_file),
                     output = 'wavecal/preshift.' + science_file, header = 'no')
-        iraf.images.imutil.hedit(images = 'wavecal/wc.'+science_file,  
+        iraf.images.imutil.hedit(images = 'wavecal/wc.'+science_file,
                                  fields = 'OI_SHIFT', value = shifts[j],
-                                 add = 'yes', show = 'yes')
-        iraf.images.imutil.hedit(images = 'wavecal/wc.'+science_file,   
+                                 add = 'yes', show = 'yes', verify='no')
+        iraf.images.imutil.hedit(images = 'wavecal/wc.'+science_file,
                                  fields = 'OI_ERR', value = shift_errs[j],
-                                 add = 'yes', show = 'yes')
-        iraf.images.imutil.hedit(images = 'wavecal/wc.'+science_file,   
-                                 fields = 'OI_QUAL', value = shift_qual[j], 
-                                  add = 'yes', show = 'yes') 
-
-        iraf.noao.onedspec.dispcor(input = 'wavecal/wc.'+science_file,  
-                                   output = 'wavecal/dc.'+science_file,   
+                                 add = 'yes', show = 'yes', verify='no')
+        iraf.images.imutil.hedit(images = 'wavecal/wc.'+science_file,
+                                 fields = 'OI_QUAL', value = shift_qual[j],
+                                  add = 'yes', show = 'yes', verify='no')
+        iraf.noao.onedspec.dispcor(input = 'wavecal/wc.'+science_file,
+                                   output = 'wavecal/dc.'+science_file,
                                    linearize = 'yes')
-        iraf.noao.onedspec.specshift(spectra = 'wavecal/dc.'+science_file,   
+        iraf.noao.onedspec.specshift(spectra = 'wavecal/dc.'+science_file,
                                      shift = shifts[j])
-        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + science_file,   
-                                 output = 'wavecal/postshift.' + science_file, 
+        iraf.noao.onedspec.scopy(input = 'wavecal/wc.' + science_file,
+                                 output = 'wavecal/postshift.' + science_file,
                                  bands = '1', format = "onedspec")
-        iraf.noao.onedspec.wspectext(
-                    input = 'wavecal/postshift.{}.2001'.format(science_file),
-                    output = 'wavecal/postshift.' + science_file, header = 'no')
+        # Obsolete: (?)
+        # iraf.noao.onedspec.wspectext(
+        #             input = 'wavecal/postshift.{}.2001'.format(science_file),
+        #             output = 'wavecal/postshift.' + science_file, header = 'no')
 
 
     iraf.flprcache()

@@ -1,5 +1,7 @@
 # README #
 
+**IMPORTANT: As of Oct 2022, we no longer develop or support this code. We encourage users to switch to PypeIt, which is completely IRAF independent.**
+
 ### What is this repository for? ###
 
 This repo is used to reduce spectra from Modspec and OSMOS instruments at Hiltner 2.4m telescope, MDM Observatory, Arizona.
